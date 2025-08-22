@@ -509,7 +509,7 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
 
         // 作者信息
         Text(
-            text = "@author UserlessWater",
+            text = "@author UselessWater",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
