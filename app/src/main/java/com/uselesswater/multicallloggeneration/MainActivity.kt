@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -253,6 +254,12 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
     var updateResult by remember { mutableStateOf<UpdateResult?>(null) }
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var includePreReleases by remember { mutableStateOf(false) }
+    var showUpdateOptions by remember { mutableStateOf(false) }
+    
+    // 下载状态
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableIntStateOf(0) }
+    var showDownloadDialog by remember { mutableStateOf(false) }
 
     // 格式化时间显示
     val dateTimeFormatter = remember {
@@ -490,32 +497,14 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
         // 设置按钮
         FilledTonalButton(
             onClick = {
-                // 检查更新
-                isCheckingUpdate = true
-                checkForUpdate(
-                    context = context,
-                    includePreReleases = includePreReleases,
-                    onStart = { },
-                    onResult = { result ->
-                        isCheckingUpdate = false
-                        updateResult = result
-                        showUpdateDialog = true
-                    }
-                )
+                // 先显示更新选项对话框
+                showUpdateOptions = true
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            enabled = !isCheckingUpdate
+                .padding(vertical = 8.dp)
         ) {
-            if (isCheckingUpdate) {
-                CircularProgressIndicator(
-                    modifier = Modifier.width(16.dp).height(16.dp),
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Text("🔄 检查更新")
-            }
+            Text("🔄 检查更新")
         }
 
         // 作者信息
@@ -731,7 +720,155 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
         )
     }
     
-    // 更新检查对话框
+    // 更新选项对话框（先让用户选择是否包含pre-release）
+    if (showUpdateOptions) {
+        AlertDialog(
+            onDismissRequest = { showUpdateOptions = false },
+            title = { 
+                Text("📦 更新检查选项", style = MaterialTheme.typography.headlineSmall) 
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "请选择要检查的更新类型：",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = includePreReleases,
+                            onCheckedChange = { includePreReleases = it }
+                        )
+                        Text("包含预发布版本", modifier = Modifier.padding(start = 8.dp))
+                    }
+                    
+                    Text(
+                        text = "预发布版本可能包含新功能但不够稳定",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        // 开始检查更新
+                        isCheckingUpdate = true
+                        showUpdateOptions = false
+                        checkForUpdate(
+                            context = context,
+                            includePreReleases = includePreReleases,
+                            onStart = { },
+                            onResult = { result ->
+                                isCheckingUpdate = false
+                                updateResult = result
+                                showUpdateDialog = true
+                            }
+                        )
+                    }
+                ) {
+                    Text("开始检查")
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { showUpdateOptions = false }
+                ) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // 下载进度对话框
+    if (showDownloadDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                // 不允许用户取消下载对话框
+                if (!isDownloading) {
+                    showDownloadDialog = false
+                }
+            },
+            title = {
+                Text("📥 正在下载更新", style = MaterialTheme.typography.headlineSmall)
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (isDownloading) {
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = { downloadProgress / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .padding(vertical = 16.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        
+                        Text(
+                            text = "下载进度: $downloadProgress%",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        
+                        Text(
+                            text = "请勿关闭应用，正在下载更新文件...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    } else {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .padding(vertical = 16.dp)
+                        )
+                        Text(
+                            text = "正在准备下载...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (isDownloading) {
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            // 取消下载
+                            val downloadManager = AppDownloadManager(context)
+                            downloadManager.cancelDownload()
+                            isDownloading = false
+                            showDownloadDialog = false
+                            android.widget.Toast.makeText(context, "下载已取消", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Text("取消下载")
+                    }
+                } else {
+                    null
+                }
+            },
+            dismissButton = {
+                if (!isDownloading) {
+                    androidx.compose.material3.TextButton(
+                        onClick = { showDownloadDialog = false }
+                    ) {
+                        Text("关闭")
+                    }
+                } else {
+                    null
+                }
+            }
+        )
+    }
+
+    // 更新检查结果对话框
     if (showUpdateDialog) {
         AlertDialog(
             onDismissRequest = { showUpdateDialog = false },
@@ -758,14 +895,6 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                             Text(result.release.body, style = MaterialTheme.typography.bodySmall)
                             
                             Spacer(modifier = Modifier.height(8.dp))
-                            
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(
-                                    checked = includePreReleases,
-                                    onCheckedChange = { includePreReleases = it }
-                                )
-                                Text("包含预发布版本", modifier = Modifier.padding(start = 8.dp))
-                            }
                         }
                     }
                     is UpdateResult.NoUpdateAvailable -> {
@@ -789,8 +918,34 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                                 val apkAsset = release.assets.firstOrNull()
                                 if (apkAsset != null) {
                                     val downloadManager = AppDownloadManager(context)
-                                    downloadManager.downloadApk(apkAsset.downloadUrl, apkAsset.name)
+                                    // 显示下载进度对话框
+                                    isDownloading = true
+                                    downloadProgress = 0
+                                    showDownloadDialog = true
                                     showUpdateDialog = false
+                                    
+                                    // 使用前台下载方法
+                                    downloadManager.downloadApkSimple(
+                                        downloadUrl = apkAsset.downloadUrl,
+                                        fileName = apkAsset.name,
+                                        onProgress = { progress ->
+                                            // 更新下载进度
+                                            downloadProgress = progress
+                                            Log.d("DownloadProgress", "下载进度: $progress%")
+                                        },
+                                        onComplete = { file ->
+                                            isDownloading = false
+                                            showDownloadDialog = false
+                                            
+                                            if (file != null) {
+                                                // 下载完成，立即安装
+                                                downloadManager.installApkFile(file)
+                                            } else {
+                                                // 下载失败
+                                                android.widget.Toast.makeText(context, "下载失败", android.widget.Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                    )
                                 }
                             }
                         ) {
