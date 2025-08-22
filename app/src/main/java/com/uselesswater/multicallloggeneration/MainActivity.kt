@@ -6,12 +6,13 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import android.provider.CallLog
 import android.telecom.PhoneAccountHandle
 import android.telecom.PhoneAccount
 import android.telecom.TelecomManager
-import android.telephony.SubscriptionInfo
+
 import android.telephony.SubscriptionManager
 import android.util.Log
 import android.widget.Toast
@@ -23,12 +24,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,8 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.core.content.ContextCompat
 import com.uselesswater.multicallloggeneration.ui.theme.CallLogGenerationTheme
@@ -645,36 +641,9 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                                     put(CallLog.Calls.CACHED_NUMBER_TYPE, 0)
                                     put(CallLog.Calls.COUNTRY_ISO, Locale.getDefault().country)
 
-                                    // 设置标准SIM卡信息字段
-                                    put(CallLog.Calls.PHONE_ACCOUNT_ID, phoneAccountInfo.accountId)
-                                    put(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, phoneAccountInfo.componentName)
-
-                                    // 只使用Android官方支持的SIM卡标识字段
-                                    // PHONE_ACCOUNT_ID 和 PHONE_ACCOUNT_COMPONENT_NAME 已经足够
-                                    // 避免使用任何厂商特定的字段
-                                    Log.d("CallLogInsert", "Using standard Android phone account fields for SIM $selectedSim")
+                                    // 使用智能SIM卡适配方案：先尝试vivo逻辑，失败后降级到标准逻辑
+                                    putSimCardFieldsWithFallback(this, selectedSim, phoneAccountInfo, context)
                                     
-                                    // 根据Android文档，确保PhoneAccount信息正确设置
-                                    // 系统会自动根据PHONE_ACCOUNT_ID来显示对应的SIM卡信息
-                                    
-                                    // 对于vivo系统，需要正确设置simid字段来显示SIM卡
-                                    try {
-                                        // 尝试设置subscription_id（如果系统支持）
-                                        val subscriptionId = getSubscriptionId(context, selectedSim)
-                                        if (subscriptionId >= 0) {
-                                            put("subscription_id", subscriptionId)
-                                            Log.d("CallLogInsert", "Added subscription_id: $subscriptionId")
-                                        }
-                                        
-                                        // vivo系统使用simid字段来显示SIM卡标识
-                                        // 根据调试信息，simid应该设置为SIM卡槽号（1或2）
-                                        put("simid", selectedSim)
-                                        Log.d("CallLogInsert", "Added simid: $selectedSim for SIM card display")
-                                        
-                                    } catch (e: Exception) {
-                                        Log.w("CallLogInsert", "Could not add SIM display fields: ${e.message}")
-                                    }
-
                                     Log.d("CallLogInsert", "Using phone account ID: ${phoneAccountInfo.accountId}, component: ${phoneAccountInfo.componentName} for SIM $selectedSim")
                                 }
 
@@ -846,5 +815,63 @@ fun DefaultPreview() {
 fun CallLogGeneratorAppPreview() {
     CallLogGenerationTheme {
         CallLogGeneratorApp(contentResolver = LocalContext.current.contentResolver) { true }
+    }
+}
+
+// SIM卡适配工具函数
+private fun isVivoDevice(): Boolean {
+    return Build.MANUFACTURER.equals("vivo", ignoreCase = true)
+}
+
+private fun putVivoSpecificFields(values: ContentValues, simSlot: Int, phoneAccountInfo: PhoneAccountInfo, context: Context) {
+    try {
+        // vivo特有字段
+        values.put("simid", simSlot)
+        values.put("subscription_component_name", phoneAccountInfo.componentName.toString())
+        
+        // 尝试设置subscription_id
+        val subscriptionId = getSubscriptionId(context, simSlot)
+        if (subscriptionId >= 0) {
+            values.put("subscription_id", subscriptionId)
+        }
+        
+        Log.d("SIMAdapter", "成功设置vivo特有SIM卡字段: simid=$simSlot")
+    } catch (e: Exception) {
+        Log.w("SIMAdapter", "vivo字段设置失败: ${e.message}")
+        throw e // 抛出异常以便降级处理
+    }
+}
+
+private fun putStandardAndroidFields(values: ContentValues, phoneAccountInfo: PhoneAccountInfo) {
+    try {
+        // 标准Android字段
+        values.put(CallLog.Calls.PHONE_ACCOUNT_ID, phoneAccountInfo.accountId)
+        values.put(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, phoneAccountInfo.componentName)
+        
+        Log.d("SIMAdapter", "使用标准Android SIM卡字段")
+    } catch (e: Exception) {
+        Log.e("SIMAdapter", "标准Android字段设置失败: ${e.message}")
+    }
+}
+
+private fun putSimCardFieldsWithFallback(
+    values: ContentValues, 
+    simSlot: Int, 
+    phoneAccountInfo: PhoneAccountInfo,
+    context: Context
+) {
+    if (isVivoDevice()) {
+        // vivo设备：先尝试vivo逻辑，失败后降级到标准逻辑
+        try {
+            putVivoSpecificFields(values, simSlot, phoneAccountInfo, context)
+            Log.d("SIMAdapter", "vivo设备使用特有字段成功")
+        } catch (e: Exception) {
+            Log.w("SIMAdapter", "vivo特有字段失败，降级到标准逻辑: ${e.message}")
+            putStandardAndroidFields(values, phoneAccountInfo)
+        }
+    } else {
+        // 非vivo设备：直接使用标准逻辑
+        putStandardAndroidFields(values, phoneAccountInfo)
+        Log.d("SIMAdapter", "非vivo设备使用标准Android字段")
     }
 }
