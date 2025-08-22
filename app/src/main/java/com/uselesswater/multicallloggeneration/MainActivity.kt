@@ -62,6 +62,20 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+// 更新检查相关导入
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
 class MainActivity : ComponentActivity() {
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -233,6 +247,12 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
     // SIM卡选择状态
     var selectedSim by remember { mutableStateOf(1) } // 1 for SIM1, 2 for SIM2
     val context = LocalContext.current
+    
+    // 更新检查状态
+    var showUpdateDialog by remember { mutableStateOf(false) }
+    var updateResult by remember { mutableStateOf<UpdateResult?>(null) }
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var includePreReleases by remember { mutableStateOf(false) }
 
     // 格式化时间显示
     val dateTimeFormatter = remember {
@@ -467,6 +487,37 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
             )
         }
 
+        // 设置按钮
+        FilledTonalButton(
+            onClick = {
+                // 检查更新
+                isCheckingUpdate = true
+                checkForUpdate(
+                    context = context,
+                    includePreReleases = includePreReleases,
+                    onStart = { },
+                    onResult = { result ->
+                        isCheckingUpdate = false
+                        updateResult = result
+                        showUpdateDialog = true
+                    }
+                )
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            enabled = !isCheckingUpdate
+        ) {
+            if (isCheckingUpdate) {
+                CircularProgressIndicator(
+                    modifier = Modifier.width(16.dp).height(16.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Text("🔄 检查更新")
+            }
+        }
+
         // 作者信息
         Text(
             text = "@author UserlessWater",
@@ -474,7 +525,7 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .align(Alignment.CenterHorizontally)
-                .padding(top = 16.dp)
+                .padding(top = 8.dp)
         )
     }
 
@@ -679,6 +730,85 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
             }
         )
     }
+    
+    // 更新检查对话框
+    if (showUpdateDialog) {
+        AlertDialog(
+            onDismissRequest = { showUpdateDialog = false },
+            title = {
+                Text(
+                    when (updateResult) {
+                        is UpdateResult.UpdateAvailable -> "📦 发现新版本"
+                        is UpdateResult.NoUpdateAvailable -> "✅ 已是最新版本"
+                        is UpdateResult.Error -> "❌ 检查更新失败"
+                        null -> "检查更新"
+                    }
+                )
+            },
+            text = {
+                when (val result = updateResult) {
+                    is UpdateResult.UpdateAvailable -> {
+                        Column {
+                            Text("版本: ${result.release.tagName}")
+                            Text("发布日期: ${result.release.publishedAt}")
+                            if (result.release.prerelease) {
+                                Text("⚠️ 预发布版本", color = Color.Yellow)
+                            }
+                            Text("更新内容:")
+                            Text(result.release.body, style = MaterialTheme.typography.bodySmall)
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = includePreReleases,
+                                    onCheckedChange = { includePreReleases = it }
+                                )
+                                Text("包含预发布版本", modifier = Modifier.padding(start = 8.dp))
+                            }
+                        }
+                    }
+                    is UpdateResult.NoUpdateAvailable -> {
+                        Text("当前已是最新版本！")
+                    }
+                    is UpdateResult.Error -> {
+                        Text("检查更新失败: ${result.message}")
+                    }
+                    null -> {
+                        CircularProgressIndicator()
+                    }
+                }
+            },
+            confirmButton = {
+                when (updateResult) {
+                    is UpdateResult.UpdateAvailable -> {
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                // 下载更新
+                                val release = (updateResult as UpdateResult.UpdateAvailable).release
+                                val apkAsset = release.assets.firstOrNull()
+                                if (apkAsset != null) {
+                                    val downloadManager = AppDownloadManager(context)
+                                    downloadManager.downloadApk(apkAsset.downloadUrl, apkAsset.name)
+                                    showUpdateDialog = false
+                                }
+                            }
+                        ) {
+                            Text("下载更新")
+                        }
+                    }
+                    else -> null
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { showUpdateDialog = false }
+                ) {
+                    Text("关闭")
+                }
+            }
+        )
+    }
 }
 
 // 定义PhoneAccountInfo数据类来存储账户信息
@@ -804,6 +934,29 @@ fun DefaultPreview() {
                     text = "🚀 批量生成通话记录",
                     style = MaterialTheme.typography.titleMedium
                 )
+            }
+        }
+    }
+}
+
+/**
+ * 检查更新
+ */
+private fun checkForUpdate(
+    context: Context,
+    includePreReleases: Boolean,
+    onStart: () -> Unit,
+    onResult: (UpdateResult) -> Unit
+) {
+    CoroutineScope(Dispatchers.IO).launch {
+        onStart()
+        
+        val updateChecker = UpdateChecker(context)
+        UpdateChecker.includePreReleases.value = includePreReleases
+        
+        updateChecker.checkForUpdate { result ->
+            CoroutineScope(Dispatchers.Main).launch {
+                onResult(result)
             }
         }
     }
