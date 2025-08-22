@@ -229,7 +229,8 @@ contentResolver.insert("content://call_log/calls".toUri(), values)
 
 ## 🌐 GitHub项目
 
-项目已开源到GitHub：https://github.com/UselessWater/CallLogGeneration
+- 项目已开源到GitHub：https://github.com/UselessWater/CallLogGeneration
+- 如需下载最新apk，可前往gitee：https://gitee.com/uselesswater/CallLogGeneration
 
 ### 📁 分支说明
 
