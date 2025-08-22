@@ -52,15 +52,22 @@ android {
         val variant = this
         val buildType = variant.buildType.name
         val versionName = variant.versionName
-        val appName = "MultiCallLog"
+        val appName = "CallLogGeneration"
 
         // 获取当前时间
         val currentTime = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())
 
         // 设置输出文件名 - 使用正确的方法
         variant.outputs.all {
-            val fileName = "${appName}_${buildType}_v${versionName}_${currentTime}.apk"
-            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = fileName
+            //如果为正式发行版，则命名为appName-v版本号.apk
+            if (buildType == "release") {
+                val fileName = "${appName}-v${versionName}.apk"
+                (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = fileName
+            }else{
+                //如果为测试版，则命名为appName_buildType_v版本号_时间.apk
+                val fileName = "${appName}_${buildType}_v${versionName}_${currentTime}.apk"
+                (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = fileName
+            }
         }
     }
 }
@@ -75,12 +82,12 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation("com.jakewharton.threetenabp:threetenabp:1.4.8")
-    
+
     // 网络请求依赖
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
-    
+
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
