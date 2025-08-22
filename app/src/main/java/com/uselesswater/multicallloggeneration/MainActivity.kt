@@ -1127,10 +1127,6 @@ fun CallLogGeneratorAppPreview() {
 }
 
 // SIM卡适配工具函数
-private fun isVivoDevice(): Boolean {
-    return Build.MANUFACTURER.equals("vivo", ignoreCase = true)
-}
-
 private fun putVivoSpecificFields(values: ContentValues, simSlot: Int, phoneAccountInfo: PhoneAccountInfo, context: Context) {
     try {
         // vivo特有字段
@@ -1168,18 +1164,12 @@ private fun putSimCardFieldsWithFallback(
     phoneAccountInfo: PhoneAccountInfo,
     context: Context
 ) {
-    if (isVivoDevice()) {
-        // vivo设备：先尝试vivo逻辑，失败后降级到标准逻辑
-        try {
-            putVivoSpecificFields(values, simSlot, phoneAccountInfo, context)
-            Log.d("SIMAdapter", "vivo设备使用特有字段成功")
-        } catch (e: Exception) {
-            Log.w("SIMAdapter", "vivo特有字段失败，降级到标准逻辑: ${e.message}")
-            putStandardAndroidFields(values, phoneAccountInfo)
-        }
-    } else {
-        // 非vivo设备：直接使用标准逻辑
+    // 无论什么设备都优先尝试vivo逻辑，失败后降级到标准逻辑
+    try {
+        putVivoSpecificFields(values, simSlot, phoneAccountInfo, context)
+        Log.d("SIMAdapter", "vivo特有字段设置成功")
+    } catch (e: Exception) {
+        Log.w("SIMAdapter", "vivo特有字段失败，降级到标准逻辑: ${e.message}")
         putStandardAndroidFields(values, phoneAccountInfo)
-        Log.d("SIMAdapter", "非vivo设备使用标准Android字段")
     }
 }
