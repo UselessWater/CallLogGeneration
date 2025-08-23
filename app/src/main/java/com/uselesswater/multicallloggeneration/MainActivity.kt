@@ -871,9 +871,20 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                                     )
 
                                     // 使用智能SIM卡适配方案：先尝试vivo逻辑，失败后降级到标准逻辑
-                                    putSimCardFieldsWithFallback(this, selectedSim, phoneAccountInfo, context)
-                                    
-                                    Log.d("CallLogInsert", "Using phone account ID: ${phoneAccountInfo.accountId}, component: ${phoneAccountInfo.componentName} for SIM $selectedSim")
+                                    try {
+                                        putSimCardFieldsWithFallback(this, selectedSim, phoneAccountInfo, context)
+                                        Log.d("CallLogInsert", "Using phone account ID: ${phoneAccountInfo.accountId}, component: ${phoneAccountInfo.componentName} for SIM $selectedSim")
+                                    } catch (e: Exception) {
+                                        Log.e("CallLogInsert", "SIM卡字段设置失败，但继续生成通话记录: ${e.message}")
+                                        // 即使SIM卡字段设置失败，仍然继续生成通话记录
+                                        try {
+                                            // 尝试设置最基本的Android标准字段
+                                            this.put(CallLog.Calls.PHONE_ACCOUNT_ID, phoneAccountInfo.accountId)
+                                            this.put(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, phoneAccountInfo.componentName)
+                                        } catch (e2: Exception) {
+                                            Log.w("CallLogInsert", "无法设置任何SIM卡字段，生成无SIM信息的通话记录")
+                                        }
+                                    }
                                 }
 
                                 contentResolver.insert(Constants.CALL_LOG_URI.toUri(), values)
