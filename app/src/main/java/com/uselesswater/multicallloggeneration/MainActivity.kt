@@ -860,10 +860,12 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                                     val callTypeValue = Constants.CALL_TYPE_OPTIONS[selectedCallTypeIndex].second
                                     val networkTypeValue = Constants.NETWORK_TYPE_OPTIONS[selectedNetworkTypeIndex].second
                                     
+                                    // 对于拒接来电和未接来电，duration应该为0，使用ringDuration作为响铃时长
+                                    val finalDuration = if (callTypeValue in listOf(Constants.CALL_TYPE_MISSED, Constants.CALL_TYPE_REJECTED)) 0 else duration
                                     CallLogGenerator.createCallByType(
                                         values = this,
                                         callTypeValue = callTypeValue,
-                                        duration = duration,
+                                        duration = finalDuration,
                                         ringDuration = ringDuration,
                                         networkType = networkTypeValue
                                     )

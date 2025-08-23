@@ -56,7 +56,7 @@ class CallLogGeneratorTest {
         CallLogGenerator.createRejectedCall(values, ringDuration)
         
         assertEquals(Constants.CALL_TYPE_REJECTED, values.getAsInteger(CallLog.Calls.TYPE))
-        assertEquals(ringDuration, values.getAsInteger(CallLog.Calls.DURATION))
+        assertEquals(0, values.getAsInteger(CallLog.Calls.DURATION))
     }
 
     @Test
@@ -90,7 +90,7 @@ class CallLogGeneratorTest {
         CallLogGenerator.createCallByType(values, Constants.CALL_TYPE_REJECTED, 0, ringDuration)
         
         assertEquals(Constants.CALL_TYPE_REJECTED, values.getAsInteger(CallLog.Calls.TYPE))
-        assertEquals(0, values.getAsInteger(CallLog.Calls.DURATION))
+        assertEquals(ringDuration, values.getAsInteger(CallLog.Calls.DURATION))
     }
 
     @Test

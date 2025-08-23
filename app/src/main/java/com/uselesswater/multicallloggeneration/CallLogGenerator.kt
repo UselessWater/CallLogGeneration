@@ -43,7 +43,7 @@ object CallLogGenerator {
      */
     fun createRejectedCall(values: ContentValues, ringDuration: Int = Constants.DEFAULT_RING_DURATION) {
         values.put(CallLog.Calls.TYPE, Constants.CALL_TYPE_REJECTED)
-        values.put(CallLog.Calls.DURATION, ringDuration)  // 对于拒接来电，duration表示响铃时长
+        values.put(CallLog.Calls.DURATION, 0)  // 对于拒接来电，duration应该为0
         
         // 尝试设置拒接原因
         try {
