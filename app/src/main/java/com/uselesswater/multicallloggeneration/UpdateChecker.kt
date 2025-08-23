@@ -1,7 +1,6 @@
 package com.uselesswater.multicallloggeneration
 
 import android.content.Context
-import android.content.pm.PackageManager
 import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import okhttp3.OkHttpClient

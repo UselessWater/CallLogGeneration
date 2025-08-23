@@ -1,12 +1,10 @@
 package com.uselesswater.multicallloggeneration
 
-import android.Manifest
 import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.os.Build
 import android.os.Bundle
 import android.provider.CallLog
 import android.telecom.PhoneAccountHandle
@@ -66,12 +64,8 @@ import java.time.format.DateTimeFormatter
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -85,9 +79,9 @@ class MainActivity : ComponentActivity() {
         val allGranted = permissions.entries.all { it.value }
         Log.i(TAG, "Permissions granted: $allGranted")
         if (allGranted) {
-            Toast.makeText(this, "已获得所有必要权限", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, Constants.PERMISSION_GRANTED, Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(this, "部分权限未授予，功能可能受限", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, Constants.PERMISSION_PARTIAL, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -104,10 +98,10 @@ class MainActivity : ComponentActivity() {
 
     private fun checkAndRequestPermissions(): Boolean {
         val permissionsToRequest = arrayOf(
-            Manifest.permission.READ_CALL_LOG,
-            Manifest.permission.WRITE_CALL_LOG,
-            Manifest.permission.READ_PHONE_STATE,
-            Manifest.permission.READ_PHONE_NUMBERS
+            Constants.PERMISSION_READ_CALL_LOG,
+            Constants.PERMISSION_WRITE_CALL_LOG,
+            Constants.PERMISSION_READ_PHONE_STATE,
+            Constants.PERMISSION_READ_PHONE_NUMBERS
         )
 
         val permissionsNotGranted = permissionsToRequest.filter {
@@ -125,7 +119,7 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        private const val TAG = "MainActivity"
+        private const val TAG = Constants.TAG_MAIN_ACTIVITY
     }
 }
 
@@ -135,39 +129,33 @@ class MainActivity : ComponentActivity() {
 private fun debugExistingCallLogs(contentResolver: ContentResolver) {
     try {
         val cursor = contentResolver.query(
-            "content://call_log/calls".toUri(),
+            Constants.CALL_LOG_URI.toUri(),
             null,
             null,
             null,
-            "${CallLog.Calls.DATE} DESC"
+            Constants.CALL_LOG_SORT_ORDER
         )
 
         cursor?.use {
-            Log.d("DebugCallLog", "Found ${it.count} existing call logs")
-            Log.d("DebugCallLog", "Available columns: ${it.columnNames.joinToString()}")
+            Log.d(Constants.TAG_DEBUG_CALL_LOG, "Found ${it.count} existing call logs")
+            Log.d(Constants.TAG_DEBUG_CALL_LOG, "Available columns: ${it.columnNames.joinToString()}")
 
             if (it.moveToFirst()) {
                 do {
                     val number = it.getString(it.getColumnIndexOrThrow(CallLog.Calls.NUMBER))
                     val phoneAccountId = it.getString(it.getColumnIndexOrThrow(CallLog.Calls.PHONE_ACCOUNT_ID))
 
-                    Log.d("DebugCallLog", "Call to $number:")
-                    Log.d("DebugCallLog", "  PHONE_ACCOUNT_ID: $phoneAccountId")
+                    Log.d(Constants.TAG_DEBUG_CALL_LOG, "Call to $number:")
+                    Log.d(Constants.TAG_DEBUG_CALL_LOG, "  PHONE_ACCOUNT_ID: $phoneAccountId")
 
                     // 检查可能的SIM相关字段（包括vivo特有的字段）
-                    val possibleSimFields = arrayOf(
-                        "subscription_id", "sub_id", "sim_id", "simid",
-                        "slot_id", "sim_slot", "phone_id", "account_id", "sim_name",
-                        "account_name", "subscription_component_name", "phone_account_id",
-                        "sim_index", "sim_number", "sim_slot_index"
-                    )
 
-                    possibleSimFields.forEach { fieldName ->
+                    Constants.POSSIBLE_SIM_FIELDS.forEach { fieldName ->
                         try {
                             val columnIndex = it.getColumnIndex(fieldName)
                             if (columnIndex >= 0) {
                                 val value = it.getString(columnIndex)
-                                Log.d("DebugCallLog", "  $fieldName: $value")
+                                Log.d(Constants.TAG_DEBUG_CALL_LOG, "  $fieldName: $value")
                             }
                         } catch (e: Exception) {
                             // 字段不存在，忽略
@@ -177,7 +165,7 @@ private fun debugExistingCallLogs(contentResolver: ContentResolver) {
             }
         }
     } catch (e: Exception) {
-        Log.e("DebugCallLog", "Error debugging call logs", e)
+        Log.e(Constants.TAG_DEBUG_CALL_LOG, "Error debugging call logs", e)
     }
 }
 
@@ -191,7 +179,7 @@ private fun getSubscriptionId(context: Context, simSlot: Int): Int {
 
         if (subscriptionInfos != null && subscriptionInfos.isNotEmpty()) {
             // simSlot是1-based，需要转换为0-based来匹配SlotIndex
-            val targetSlotIndex = simSlot - 1
+            val targetSlotIndex = simSlot - Constants.DEFAULT_SIM_SLOT_INDEX_OFFSET
 
             // 查找匹配槽位的订阅信息
             val matchingSubscription = subscriptionInfos.find { it.simSlotIndex == targetSlotIndex }
@@ -224,7 +212,7 @@ data class TimeRange(val name: String, val minSeconds: Int, val maxSeconds: Int)
 @Composable
 fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () -> Boolean) {
     var phoneNumbersText by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf("本工具由苏廷洪推出，请勿用于非法用途！\n请输入电话号码，每行一个号码") }
+    var message by remember { mutableStateOf(Constants.DEFAULT_MESSAGE) }
     var showDialog by remember { mutableStateOf(false) }
     var generatedCount by remember { mutableIntStateOf(0) }
 
@@ -233,12 +221,13 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
 
-    // 定义三个预设的时间范围
+    // 定义四个时间范围选项（包括自定义）
     val timeRanges = remember {
         listOf(
-            TimeRange("15秒-1分钟", 15, 60),
-            TimeRange("30秒-1分钟", 30, 60),
-            TimeRange("1分钟-1分30秒", 60, 90)
+            TimeRange(Constants.TIME_RANGE_SHORT_NAME, Constants.TIME_RANGE_SHORT_MIN, Constants.TIME_RANGE_SHORT_MAX),
+            TimeRange(Constants.TIME_RANGE_MEDIUM_NAME, Constants.TIME_RANGE_MEDIUM_MIN, Constants.TIME_RANGE_MEDIUM_MAX),
+            TimeRange(Constants.TIME_RANGE_LONG_NAME, Constants.TIME_RANGE_LONG_MIN, Constants.TIME_RANGE_LONG_MAX),
+            TimeRange(Constants.TIME_RANGE_CUSTOM_NAME, Constants.TIME_RANGE_CUSTOM_MIN, Constants.TIME_RANGE_CUSTOM_MAX)
         )
     }
 
@@ -261,9 +250,19 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
     var downloadProgress by remember { mutableIntStateOf(0) }
     var showDownloadDialog by remember { mutableStateOf(false) }
 
+    // 通话类型选择状态
+    var selectedCallTypeIndex by remember { mutableStateOf(0) }
+    var ringDuration by remember { mutableIntStateOf(Constants.DEFAULT_RING_DURATION) }
+    var selectedNetworkTypeIndex by remember { mutableStateOf(2) } // 默认4G
+    var showAdvancedSettings by remember { mutableStateOf(false) }
+    
+    // 自定义时长状态
+    var customMinDuration by remember { mutableIntStateOf(30) }
+    var customMaxDuration by remember { mutableIntStateOf(60) }
+
     // 格式化时间显示
     val dateTimeFormatter = remember {
-        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+        DateTimeFormatter.ofPattern(Constants.DATE_TIME_PATTERN)
     }
 
     val displayTime = remember(startTimeMillis) {
@@ -280,7 +279,7 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
     ) {
         // 应用标题
         Text(
-            text = "📞 通话记录生成工具",
+            text = Constants.APP_TITLE,
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -305,7 +304,7 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "电话号码池",
+                    text = Constants.PHONE_NUMBER_POOL_TITLE,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -314,11 +313,11 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                 OutlinedTextField(
                     value = phoneNumbersText,
                     onValueChange = { phoneNumbersText = it },
-                    label = { Text("每行一个号码") },
+                    label = { Text(Constants.PHONE_NUMBER_LABEL) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(120.dp),
-                    placeholder = { Text("例如：\n13800138000\n13900139000\n13700137000") },
+                    placeholder = { Text(Constants.PHONE_NUMBER_PLACEHOLDER) },
                     shape = MaterialTheme.shapes.medium
                 )
             }
@@ -332,7 +331,7 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "时间设置",
+                    text = Constants.TIME_SETTINGS_TITLE,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 12.dp)
@@ -340,7 +339,7 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
 
                 // 起始时间显示
                 Text(
-                    text = "起始时间：$displayTime",
+                    text = "${Constants.START_TIME_LABEL}$displayTime",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
@@ -353,13 +352,13 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                         onClick = { showDatePicker = true },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("选择日期")
+                        Text(Constants.DATE_BUTTON_TEXT)
                     }
                     androidx.compose.material3.FilledTonalButton(
                         onClick = { showTimePicker = true },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("选择时间")
+                        Text(Constants.TIME_BUTTON_TEXT)
                     }
                 }
 
@@ -368,7 +367,7 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                 // 通话时长选择 - 下拉框
                 var timeRangeExpanded by remember { mutableStateOf(false) }
                 Text(
-                    text = "通话时长：",
+                    text = Constants.CALL_DURATION_LABEL,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
@@ -402,6 +401,47 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                         }
                     }
                 }
+
+                // 自定义时长设置（当选择自定义时显示）
+                if (selectedTimeRangeIndex == 3) {
+                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                        Text(
+                            text = "最小时长: ${customMinDuration}秒",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        androidx.compose.material3.Slider(
+                            value = customMinDuration.toFloat(),
+                            onValueChange = { customMinDuration = it.toInt() },
+                            valueRange = Constants.TIME_RANGE_CUSTOM_MIN.toFloat()..Constants.TIME_RANGE_CUSTOM_MAX.toFloat(),
+                            steps = 59,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        Text(
+                            text = "最大时长: ${customMaxDuration}秒",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                        )
+                        androidx.compose.material3.Slider(
+                            value = customMaxDuration.toFloat(),
+                            onValueChange = { customMaxDuration = it.toInt() },
+                            valueRange = Constants.TIME_RANGE_CUSTOM_MIN.toFloat()..Constants.TIME_RANGE_CUSTOM_MAX.toFloat(),
+                            steps = 59,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        // 验证最小最大值
+                        if (customMinDuration > customMaxDuration) {
+                            Text(
+                                text = "⚠️ 最小时长不能大于最大时长",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -413,7 +453,7 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "SIM卡选择",
+                    text = Constants.SIM_SELECTION_TITLE,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 12.dp)
@@ -421,7 +461,7 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
 
                 // SIM卡选择 - 下拉框
                 var simExpanded by remember { mutableStateOf(false) }
-                val simOptions = listOf("SIM 1", "SIM 2")
+                val simOptions = listOf(Constants.SIM_OPTION_SIM1, Constants.SIM_OPTION_SIM2)
 
                 ExposedDropdownMenuBox(
                     expanded = simExpanded,
@@ -455,6 +495,128 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
             }
         }
 
+        // 通话类型选择区域
+        androidx.compose.material3.Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 20.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "通话类型设置",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                // 通话类型选择 - 下拉框
+                var callTypeExpanded by remember { mutableStateOf(false) }
+
+                ExposedDropdownMenuBox(
+                    expanded = callTypeExpanded,
+                    onExpandedChange = { callTypeExpanded = !callTypeExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = Constants.CALL_TYPE_OPTIONS[selectedCallTypeIndex].first,
+                        onValueChange = {},
+                        readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = callTypeExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = callTypeExpanded,
+                        onDismissRequest = { callTypeExpanded = false }
+                    ) {
+                        Constants.CALL_TYPE_OPTIONS.forEachIndexed { index, (name, _) ->
+                            DropdownMenuItem(
+                                text = { Text(name) },
+                                onClick = {
+                                    selectedCallTypeIndex = index
+                                    callTypeExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // 高级设置按钮
+                androidx.compose.material3.TextButton(
+                    onClick = { showAdvancedSettings = !showAdvancedSettings },
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Text("${if (showAdvancedSettings) "隐藏" else "显示"}高级设置")
+                }
+
+                // 高级设置区域
+                if (showAdvancedSettings) {
+                    Column(modifier = Modifier.padding(top = 16.dp)) {
+                        // 响铃时长设置（用于未接/拒接来电）
+                        val currentCallTypeValue = Constants.CALL_TYPE_OPTIONS[selectedCallTypeIndex].second
+                        if (currentCallTypeValue in listOf(Constants.CALL_TYPE_MISSED, -1)) {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(
+                                    text = "响铃时长: ${ringDuration}秒",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                androidx.compose.material3.Slider(
+                                    value = ringDuration.toFloat(),
+                                    onValueChange = { ringDuration = it.toInt() },
+                                    valueRange = 1f..60f,
+                                    steps = 59,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+
+                        // 网络类型设置（用于VoIP通话）
+                        if (currentCallTypeValue == -2) {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                var networkExpanded by remember { mutableStateOf(false) }
+                                Text(
+                                    text = "网络类型:",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                ExposedDropdownMenuBox(
+                                    expanded = networkExpanded,
+                                    onExpandedChange = { networkExpanded = !networkExpanded }
+                                ) {
+                                    OutlinedTextField(
+                                        value = Constants.NETWORK_TYPE_OPTIONS[selectedNetworkTypeIndex].first,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = networkExpanded) },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .menuAnchor()
+                                    )
+
+                                    ExposedDropdownMenu(
+                                        expanded = networkExpanded,
+                                        onDismissRequest = { networkExpanded = false }
+                                    ) {
+                                        Constants.NETWORK_TYPE_OPTIONS.forEachIndexed { index, (name, _) ->
+                                            DropdownMenuItem(
+                                                text = { Text(name) },
+                                                onClick = {
+                                                    selectedNetworkTypeIndex = index
+                                                    networkExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // 生成按钮
         androidx.compose.material3.Button(
             onClick = {
@@ -467,7 +629,7 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                             .filter { it.isNotEmpty() }
 
                         if (phoneNumbers.isEmpty()) {
-                            message = "请至少输入一个电话号码"
+                            message = Constants.ERROR_NO_PHONE_NUMBERS
                             Log.w("CallLogGeneratorApp", "Validation failed: No phone numbers entered.")
                             return@Button
                         }
@@ -489,7 +651,7 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
             shape = MaterialTheme.shapes.large
         ) {
             Text(
-                text = "🚀 批量生成通话记录",
+                text = Constants.GENERATE_BUTTON_TEXT,
                 style = MaterialTheme.typography.titleMedium
             )
         }
@@ -504,12 +666,12 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                 .fillMaxWidth()
                 .padding(vertical = 8.dp)
         ) {
-            Text("🔄 检查更新")
+            Text(Constants.CHECK_UPDATE_BUTTON_TEXT)
         }
 
         // 作者信息
         Text(
-            text = "@author UselessWater",
+            text = Constants.AUTHOR_INFO,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
@@ -629,12 +791,21 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "• 通话时长: ${selectedRange.name} (${selectedRange.minSeconds}-${selectedRange.maxSeconds}秒)",
+                        text = if (selectedTimeRangeIndex == 3) {
+                            "• 通话时长: ${selectedRange.name} (${customMinDuration}-${customMaxDuration}秒)"
+                        } else {
+                            "• 通话时长: ${selectedRange.name} (${selectedRange.minSeconds}-${selectedRange.maxSeconds}秒)"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = "• SIM 卡: SIM $selectedSim",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "• 通话类型: ${Constants.CALL_TYPE_OPTIONS[selectedCallTypeIndex].first}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -648,7 +819,7 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                         try {
                             val phoneAccountInfo = getPhoneAccountInfo(context, selectedSim)
                             if (phoneAccountInfo == null) {
-                                message = "无法找到选择的SIM卡 (SIM $selectedSim)。请检查SIM卡状态和权限。"
+                                message = String.format(Constants.ERROR_SIM_NOT_FOUND, selectedSim)
                                 Log.w("CallLogGeneratorApp", "Could not find phone account for SIM $selectedSim.")
                                 showDialog = false
                                 return@TextButton
@@ -669,17 +840,33 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                             Log.d("CallLogGeneratorApp", "Starting loop to generate ${phoneNumbers.size} call logs.")
                             phoneNumbers.forEach { phoneNumber ->
                                 // 在选定的时间范围内生成随机通话时长
-                                val duration = Random.nextInt(selectedRange.minSeconds, selectedRange.maxSeconds + 1)
+                                val duration = if (selectedTimeRangeIndex == 3) {
+                                    // 自定义时长范围
+                                    Random.nextInt(customMinDuration, customMaxDuration + 1)
+                                } else {
+                                    // 预设时长范围
+                                    Random.nextInt(selectedRange.minSeconds, selectedRange.maxSeconds + 1)
+                                }
 
                                 val values = ContentValues().apply {
                                     put(CallLog.Calls.NUMBER, phoneNumber)
                                     put(CallLog.Calls.DATE, currentTime)
-                                    put(CallLog.Calls.DURATION, duration)
-                                    put(CallLog.Calls.TYPE, CallLog.Calls.OUTGOING_TYPE)
                                     put(CallLog.Calls.NEW, 1)
                                     put(CallLog.Calls.CACHED_NAME, "")
                                     put(CallLog.Calls.CACHED_NUMBER_TYPE, 0)
                                     put(CallLog.Calls.COUNTRY_ISO, Locale.getDefault().country)
+
+                                    // 使用CallLogGenerator创建不同类型的通话记录
+                                    val callTypeValue = Constants.CALL_TYPE_OPTIONS[selectedCallTypeIndex].second
+                                    val networkTypeValue = Constants.NETWORK_TYPE_OPTIONS[selectedNetworkTypeIndex].second
+                                    
+                                    CallLogGenerator.createCallByType(
+                                        values = this,
+                                        callTypeValue = callTypeValue,
+                                        duration = duration,
+                                        ringDuration = ringDuration,
+                                        networkType = networkTypeValue
+                                    )
 
                                     // 使用智能SIM卡适配方案：先尝试vivo逻辑，失败后降级到标准逻辑
                                     putSimCardFieldsWithFallback(this, selectedSim, phoneAccountInfo, context)
@@ -687,22 +874,22 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                                     Log.d("CallLogInsert", "Using phone account ID: ${phoneAccountInfo.accountId}, component: ${phoneAccountInfo.componentName} for SIM $selectedSim")
                                 }
 
-                                contentResolver.insert("content://call_log/calls".toUri(), values)
+                                contentResolver.insert(Constants.CALL_LOG_URI.toUri(), values)
                                 successCount++
                                 Log.d("CallLogGeneratorApp", "Successfully inserted log for $phoneNumber ($successCount/${phoneNumbers.size})")
 
                                 // 更新时间：当前通话结束时间 + 随机间隔（40~120秒）
-                                val randomInterval = Random.nextInt(40, 121) * 1000L // 转换为毫秒
+                                val randomInterval = Random.nextInt(Constants.CALL_INTERVAL_MIN, Constants.CALL_INTERVAL_MAX + 1) * Constants.MILLISECONDS_PER_SECOND
                                 currentTime += (duration * 1000L) + randomInterval
                             }
 
-                            message = "✅ 成功生成 $successCount 条通话记录！"
+                            message = String.format(Constants.SUCCESS_GENERATION, successCount)
                             Log.i("CallLogGeneratorApp", "Finished generation. Success count: $successCount")
                         } catch (e: SecurityException) {
-                            message = "❌ 生成失败: 权限不足。${e.message}"
+                            message = "${Constants.ERROR_PERMISSION_DENIED}${e.message}"
                             Log.e("CallLogGeneratorApp", "SecurityException during call log generation", e)
                         } catch (e: Exception) {
-                            message = "❌ 生成失败: ${e.message}"
+                            message = "${Constants.ERROR_GENERATION_FAILED}${e.message}"
                             Log.e("CallLogGeneratorApp", "Generic exception during call log generation", e)
                         }
 
@@ -973,83 +1160,68 @@ data class PhoneAccountInfo(
 )
 
 private fun getPhoneAccountInfo(context: Context, simSlot: Int): PhoneAccountInfo? {
-    val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
     Log.d("getPhoneAccountInfo", "Attempting to get phone account for SIM slot: $simSlot")
 
     return try {
-        val phoneAccounts: List<PhoneAccountHandle> = telecomManager.callCapablePhoneAccounts
-        Log.d("getPhoneAccountInfo", "Found ${phoneAccounts.size} phone accounts:")
-
-        // 详细日志记录所有账户信息
-        phoneAccounts.forEachIndexed { index, account ->
-            Log.d("getPhoneAccountInfo", "Account $index: id=${account.id}, component=${account.componentName}")
-
-            // 尝试获取账户详细信息
-            try {
-                val phoneAccount = telecomManager.getPhoneAccount(account)
-                Log.d("getPhoneAccountInfo", "  Label: ${phoneAccount?.label}")
-                Log.d("getPhoneAccountInfo", "  Address: ${phoneAccount?.address}")
-                Log.d("getPhoneAccountInfo", "  Capabilities: ${phoneAccount?.capabilities}")
-                Log.d("getPhoneAccountInfo", "  HighlightColor: ${phoneAccount?.highlightColor}")
-                
-                // 检查是否是有效的SIM卡账户
-                if (phoneAccount != null) {
-                    val isSimAccount = (phoneAccount.capabilities and PhoneAccount.CAPABILITY_SIM_SUBSCRIPTION) != 0
-                    Log.d("getPhoneAccountInfo", "  Is SIM subscription: $isSimAccount")
-                }
-            } catch (e: Exception) {
-                Log.w("getPhoneAccountInfo", "Could not get details for account $index: ${e.message}")
-            }
+        // 使用SubscriptionManager获取SIM卡信息
+        val subscriptionManager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
+        val subscriptionInfos = subscriptionManager.activeSubscriptionInfoList
+        
+        if (subscriptionInfos == null || subscriptionInfos.isEmpty()) {
+            Log.w("getPhoneAccountInfo", "No active subscriptions found")
+            return null
         }
 
-        // 如果只有一个SIM卡账户，直接返回其信息
-        if (phoneAccounts.size == 1) {
-            val account = phoneAccounts[0]
-            val accountInfo = PhoneAccountInfo(
-                accountId = account.id,
-                componentName = account.componentName.flattenToString()
-            )
-            Log.i("getPhoneAccountInfo", "Only one account found, using: ${accountInfo.accountId}")
-            return accountInfo
+        Log.d("getPhoneAccountInfo", "Found ${subscriptionInfos.size} active subscriptions:")
+        
+        // 记录所有订阅信息
+        subscriptionInfos.forEachIndexed { index, info ->
+            Log.d("getPhoneAccountInfo", "Subscription $index: id=${info.subscriptionId}, slot=${info.simSlotIndex}, carrier=${info.carrierName}")
         }
 
         // 对于多SIM卡设备，尝试根据SIM卡插槽选择
-        if (phoneAccounts.isNotEmpty() && simSlot <= phoneAccounts.size) {
-            // simSlot is 1-based, list is 0-based
-            val account = phoneAccounts[simSlot - 1]
-            val accountInfo = PhoneAccountInfo(
-                accountId = account.id,
-                componentName = account.componentName.flattenToString()
-            )
-            Log.i("getPhoneAccountInfo", "Selected account for SIM $simSlot: ${accountInfo.accountId}, component: ${accountInfo.componentName}")
-
-            // 尝试通过SubscriptionManager验证这个选择
-            try {
-                val subscriptionId = getSubscriptionId(context, simSlot)
-                if (subscriptionId >= 0) {
-                    Log.i("getPhoneAccountInfo", "Verified with subscription ID: $subscriptionId")
-                }
-            } catch (e: Exception) {
-                Log.w("getPhoneAccountInfo", "Could not verify with subscription manager: ${e.message}")
-            }
-
-            accountInfo
-        } else {
-            Log.w("getPhoneAccountInfo", "Phone account for SIM $simSlot not found. Using default SIM")
-            // 如果找不到指定的SIM卡，使用第一个可用的账户
-            phoneAccounts.firstOrNull()?.let { account ->
-                PhoneAccountInfo(
-                    accountId = account.id,
-                    componentName = account.componentName.flattenToString()
-                )
+        // SIM卡槽索引可能是0-based或1-based，需要适配不同设备
+        val targetSlotIndex = simSlot - Constants.DEFAULT_SIM_SLOT_INDEX_OFFSET
+        
+        // 首先尝试精确匹配
+        var matchingSubscription = subscriptionInfos.find { it.simSlotIndex == targetSlotIndex }
+        
+        // 如果找不到精确匹配，尝试其他可能的匹配方式
+        if (matchingSubscription == null) {
+            // 尝试直接使用simSlot作为索引（某些设备可能是1-based）
+            matchingSubscription = subscriptionInfos.find { it.simSlotIndex == simSlot }
+            
+            // 如果还找不到，使用第一个可用的SIM卡
+            if (matchingSubscription == null && subscriptionInfos.isNotEmpty()) {
+                matchingSubscription = subscriptionInfos[0]
+                Log.w("getPhoneAccountInfo", "No exact match found for SIM slot $simSlot, using first available: ${matchingSubscription.simSlotIndex}")
             }
         }
+        
+        if (matchingSubscription != null) {
+            // 使用subscriptionId作为accountId
+            val accountInfo = PhoneAccountInfo(
+                accountId = matchingSubscription.subscriptionId.toString(),
+                componentName = "com.android.phone" // 默认的电话组件
+            )
+            Log.i("getPhoneAccountInfo", "Selected subscription for SIM $simSlot: ${accountInfo.accountId}")
+            return accountInfo
+        } else {
+            Log.w("getPhoneAccountInfo", "Subscription for SIM slot $simSlot not found. Using first available")
+            // 使用第一个可用的订阅
+            val firstSubscription = subscriptionInfos[0]
+            val accountInfo = PhoneAccountInfo(
+                accountId = firstSubscription.subscriptionId.toString(),
+                componentName = "com.android.phone"
+            )
+            Log.i("getPhoneAccountInfo", "Using first subscription: ${accountInfo.accountId}")
+            return accountInfo
+        }
     } catch (e: SecurityException) {
-        Log.e("getPhoneAccountInfo", "SecurityException while accessing call-capable phone accounts", e)
-        // Permissions are not granted
+        Log.e("getPhoneAccountInfo", "SecurityException while accessing subscription info", e)
         null
     } catch (e: Exception) {
-        Log.e("getPhoneAccountInfo", "Error getting phone accounts", e)
+        Log.e("getPhoneAccountInfo", "Error getting subscription info", e)
         null
     }
 }
@@ -1065,7 +1237,7 @@ fun DefaultPreview() {
                 .padding(24.dp)
         ) {
             Text(
-                text = "📞 通话记录生成工具",
+                text = Constants.APP_TITLE,
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -1086,7 +1258,7 @@ fun DefaultPreview() {
                 shape = MaterialTheme.shapes.large
             ) {
                 Text(
-                    text = "🚀 批量生成通话记录",
+                    text = Constants.GENERATE_BUTTON_TEXT,
                     style = MaterialTheme.typography.titleMedium
                 )
             }
@@ -1126,37 +1298,6 @@ fun CallLogGeneratorAppPreview() {
     }
 }
 
-// SIM卡适配工具函数
-private fun putVivoSpecificFields(values: ContentValues, simSlot: Int, phoneAccountInfo: PhoneAccountInfo, context: Context) {
-    try {
-        // vivo特有字段
-        values.put("simid", simSlot)
-        values.put("subscription_component_name", phoneAccountInfo.componentName.toString())
-        
-        // 尝试设置subscription_id
-        val subscriptionId = getSubscriptionId(context, simSlot)
-        if (subscriptionId >= 0) {
-            values.put("subscription_id", subscriptionId)
-        }
-        
-        Log.d("SIMAdapter", "成功设置vivo特有SIM卡字段: simid=$simSlot")
-    } catch (e: Exception) {
-        Log.w("SIMAdapter", "vivo字段设置失败: ${e.message}")
-        throw e // 抛出异常以便降级处理
-    }
-}
-
-private fun putStandardAndroidFields(values: ContentValues, phoneAccountInfo: PhoneAccountInfo) {
-    try {
-        // 标准Android字段
-        values.put(CallLog.Calls.PHONE_ACCOUNT_ID, phoneAccountInfo.accountId)
-        values.put(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, phoneAccountInfo.componentName)
-        
-        Log.d("SIMAdapter", "使用标准Android SIM卡字段")
-    } catch (e: Exception) {
-        Log.e("SIMAdapter", "标准Android字段设置失败: ${e.message}")
-    }
-}
 
 private fun putSimCardFieldsWithFallback(
     values: ContentValues, 
@@ -1164,12 +1305,59 @@ private fun putSimCardFieldsWithFallback(
     phoneAccountInfo: PhoneAccountInfo,
     context: Context
 ) {
-    // 无论什么设备都优先尝试vivo逻辑，失败后降级到标准逻辑
+    // 字段级降级机制：对每个字段优先尝试vivo逻辑，失败后使用Android标准逻辑
+    
+    // 1. 处理SIM ID字段
     try {
-        putVivoSpecificFields(values, simSlot, phoneAccountInfo, context)
-        Log.d("SIMAdapter", "vivo特有字段设置成功")
+        values.put(Constants.SIM_ID_FIELD, simSlot)
+        Log.d(Constants.TAG_SIM_ADAPTER, "使用vivo字段: ${Constants.SIM_ID_FIELD}=$simSlot")
     } catch (e: Exception) {
-        Log.w("SIMAdapter", "vivo特有字段失败，降级到标准逻辑: ${e.message}")
-        putStandardAndroidFields(values, phoneAccountInfo)
+        Log.w(Constants.TAG_SIM_ADAPTER, "vivo字段 ${Constants.SIM_ID_FIELD} 不支持，使用标准字段")
+        // 对于SIM ID，如果没有vivo特有字段，使用标准字段
+        try {
+            values.put(CallLog.Calls.PHONE_ACCOUNT_ID, phoneAccountInfo.accountId)
+            Log.d(Constants.TAG_SIM_ADAPTER, "使用标准字段: PHONE_ACCOUNT_ID=${phoneAccountInfo.accountId}")
+        } catch (e2: Exception) {
+            Log.e(Constants.TAG_SIM_ADAPTER, "标准字段 PHONE_ACCOUNT_ID 也不支持")
+        }
+    }
+    
+    // 2. 处理subscription_id字段
+    try {
+        val subscriptionId = getSubscriptionId(context, simSlot)
+        if (subscriptionId >= 0) {
+            values.put(Constants.SUBSCRIPTION_ID_FIELD, subscriptionId)
+            Log.d(Constants.TAG_SIM_ADAPTER, "使用vivo字段: ${Constants.SUBSCRIPTION_ID_FIELD}=$subscriptionId")
+        }
+    } catch (e: Exception) {
+        Log.w(Constants.TAG_SIM_ADAPTER, "vivo字段 ${Constants.SUBSCRIPTION_ID_FIELD} 设置失败")
+        // subscription_id没有直接的标准对应字段，可以忽略
+    }
+    
+    // 3. 处理组件名字段
+    try {
+        values.put(Constants.SUBSCRIPTION_COMPONENT_NAME_FIELD, phoneAccountInfo.componentName.toString())
+        Log.d(Constants.TAG_SIM_ADAPTER, "使用vivo字段: ${Constants.SUBSCRIPTION_COMPONENT_NAME_FIELD}=${phoneAccountInfo.componentName}")
+    } catch (e: Exception) {
+        Log.w(Constants.TAG_SIM_ADAPTER, "vivo字段 ${Constants.SUBSCRIPTION_COMPONENT_NAME_FIELD} 不支持，使用标准字段")
+        try {
+            values.put(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, phoneAccountInfo.componentName)
+            Log.d(Constants.TAG_SIM_ADAPTER, "使用标准字段: PHONE_ACCOUNT_COMPONENT_NAME=${phoneAccountInfo.componentName}")
+        } catch (e2: Exception) {
+            Log.e(Constants.TAG_SIM_ADAPTER, "标准字段 PHONE_ACCOUNT_COMPONENT_NAME 也不支持")
+        }
+    }
+    
+    // 4. 确保至少设置了基本的Android标准字段
+    try {
+        if (!values.containsKey(CallLog.Calls.PHONE_ACCOUNT_ID)) {
+            values.put(CallLog.Calls.PHONE_ACCOUNT_ID, phoneAccountInfo.accountId)
+        }
+        if (!values.containsKey(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME)) {
+            values.put(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, phoneAccountInfo.componentName)
+        }
+        Log.d(Constants.TAG_SIM_ADAPTER, "确保设置了标准Android字段")
+    } catch (e: Exception) {
+        Log.e(Constants.TAG_SIM_ADAPTER, "无法设置标准Android字段: ${e.message}")
     }
 }

@@ -7,8 +7,9 @@
     <uses-permission android:name="android.permission.WRITE_CALL_LOG" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
-    <!-- vivo系统可能需要的额外权限 -->
+    <!-- SIM卡相关权限 -->
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+    <uses-permission android:name="android.permission.READ_PRIVILEGED_PHONE_STATE" tools:ignore="ProtectedPermissions" />
     
     <!-- 网络权限 -->
     <uses-permission android:name="android.permission.INTERNET" />
