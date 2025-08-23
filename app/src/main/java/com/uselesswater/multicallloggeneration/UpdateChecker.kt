@@ -25,6 +25,7 @@ class UpdateChecker(private val context: Context) {
         
         // 更新配置
         var includePreReleases = mutableStateOf(false)
+        var updateToLatest = mutableStateOf(true) // true: 更新到最新版, false: 只更新到新版本
     }
     
     private val httpClient = OkHttpClient()
@@ -52,9 +53,15 @@ class UpdateChecker(private val context: Context) {
             val latestRelease = findSuitableRelease(releases, currentVersion)
             
             if (latestRelease != null) {
-                val isNewer = isNewerVersion(latestRelease, currentVersion)
+                // 如果用户选择"更新到最新版"，直接返回最新版本
+                // 如果用户选择"只更新到新版本"，需要检查版本是否更新
+                val shouldUpdate = if (updateToLatest.value) {
+                    true  // 总是更新到最新版
+                } else {
+                    isNewerVersion(latestRelease, currentVersion)  // 只更新到新版本
+                }
                 
-                if (isNewer) {
+                if (shouldUpdate) {
                     callback(UpdateResult.UpdateAvailable(latestRelease))
                 } else {
                     callback(UpdateResult.NoUpdateAvailable)
@@ -174,12 +181,18 @@ class UpdateChecker(private val context: Context) {
     
     /**
      * 查找合适的发行版
+     * 如果用户选择更新到最新版，则返回最新的可用版本
      */
     private fun findSuitableRelease(releases: List<ReleaseInfo>, currentVersion: VersionInfo): ReleaseInfo? {
-        return releases.firstOrNull { release ->
-            // 如果用户开启pre-release，则包含所有版本，否则只包含正式版
-            (includePreReleases.value || !release.prerelease) &&
-            isNewerVersion(release, currentVersion)
+        // 过滤出符合条件的发行版（根据pre-release设置）
+        val filteredReleases = releases.filter { release ->
+            includePreReleases.value || !release.prerelease
+        }
+        
+        // 如果用户选择更新到最新版，返回最新的发行版
+        return filteredReleases.maxByOrNull { release ->
+            // 按发布时间排序，获取最新的发行版
+            release.publishedAt
         }
     }
     

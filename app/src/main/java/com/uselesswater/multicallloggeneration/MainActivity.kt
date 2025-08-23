@@ -930,11 +930,28 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
             text = {
                 Column {
                     Text(
-                        text = "请选择要检查的更新类型：",
+                        text = "请选择更新策略：",
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
                     
+                    // 更新策略选择
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = UpdateChecker.updateToLatest.value,
+                            onCheckedChange = { UpdateChecker.updateToLatest.value = it }
+                        )
+                        Text("总是更新到最新版本", modifier = Modifier.padding(start = 8.dp))
+                    }
+                    
+                    Text(
+                        text = "如果启用，将忽略版本新旧直接更新到最新版",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    
+                    // 预发布版本选择
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
                             checked = includePreReleases,
@@ -1091,6 +1108,18 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                             if (result.release.prerelease) {
                                 Text("⚠️ 预发布版本", color = Color.Yellow)
                             }
+                            
+                            // 显示更新策略信息
+                            if (UpdateChecker.updateToLatest.value) {
+                                Text("📋 更新策略: 更新到最新版本", 
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.bodySmall)
+                            } else {
+                                Text("📋 更新策略: 只更新到新版本", 
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                            
                             Text("更新内容:")
                             Text(result.release.body, style = MaterialTheme.typography.bodySmall)
                             
@@ -1098,7 +1127,11 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                         }
                     }
                     is UpdateResult.NoUpdateAvailable -> {
-                        Text("当前已是最新版本！")
+                        if (UpdateChecker.updateToLatest.value) {
+                            Text("🎉 恭喜！您已经运行着最新版本！")
+                        } else {
+                            Text("当前已是最新版本！")
+                        }
                     }
                     is UpdateResult.Error -> {
                         Text("检查更新失败: ${result.message}")
