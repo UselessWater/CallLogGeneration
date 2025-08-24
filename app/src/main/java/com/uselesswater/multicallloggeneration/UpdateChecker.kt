@@ -181,7 +181,7 @@ class UpdateChecker(private val context: Context) {
     
     /**
      * 查找合适的发行版
-     * 如果用户选择更新到最新版，则返回最新的可用版本
+     * 如果用户选择更新到最新版，则返回版本号最新的可用版本
      */
     private fun findSuitableRelease(releases: List<ReleaseInfo>, currentVersion: VersionInfo): ReleaseInfo? {
         // 过滤出符合条件的发行版（根据pre-release设置）
@@ -189,11 +189,33 @@ class UpdateChecker(private val context: Context) {
             includePreReleases.value || !release.prerelease
         }
         
-        // 如果用户选择更新到最新版，返回最新的发行版
+        // 按版本号排序，获取版本号最新的发行版
         return filteredReleases.maxByOrNull { release ->
-            // 按发布时间排序，获取最新的发行版
-            release.publishedAt
+            // 使用版本号比较而不是发布时间
+            val versionNumber = release.tagName.removePrefix("v")
+            parseVersionNumber(versionNumber)
         }
+    }
+    
+    /**
+     * 解析版本号为可比较的数字
+     */
+    internal fun parseVersionNumber(version: String): Long {
+        val parts = version.split(".", "-").map { it.toIntOrNull() ?: 0 }
+        var result = 0L
+        
+        // 将版本号转换为可比较的长整型数字
+        // 格式: major * 10000 + minor * 100 + patch
+        for (i in parts.indices) {
+            val part = parts[i]
+            when (i) {
+                0 -> result += part.toLong() * 10_000  // 主版本
+                1 -> result += part.toLong() * 100     // 次版本
+                2 -> result += part.toLong()           // 修订版本
+            }
+        }
+        
+        return result
     }
     
     /**
@@ -214,7 +236,7 @@ class UpdateChecker(private val context: Context) {
     /**
      * 比较版本号
      */
-    private fun compareVersions(version1: String, version2: String): Int {
+    internal fun compareVersions(version1: String, version2: String): Int {
         val parts1 = version1.split(".", "-").map { it.toIntOrNull() ?: 0 }
         val parts2 = version2.split(".", "-").map { it.toIntOrNull() ?: 0 }
         
