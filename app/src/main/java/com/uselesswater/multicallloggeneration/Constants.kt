@@ -103,25 +103,9 @@ object Constants {
         "呼出电话" to CALL_TYPE_OUTGOING,
         "来电(已接)" to CALL_TYPE_INCOMING,
         "未接来电" to CALL_TYPE_MISSED,
-        "拒接来电" to CALL_TYPE_REJECTED,
-        "VoIP通话" to -2
+        "拒接来电" to CALL_TYPE_REJECTED
     )
 
-    // 网络类型常量
-    const val NETWORK_TYPE_2G = 1
-    const val NETWORK_TYPE_3G = 2
-    const val NETWORK_TYPE_4G = 3
-    const val NETWORK_TYPE_5G = 4
-    const val NETWORK_TYPE_WIFI = 5
-
-    // 网络类型选项
-    val NETWORK_TYPE_OPTIONS = listOf(
-        "2G" to NETWORK_TYPE_2G,
-        "3G" to NETWORK_TYPE_3G,
-        "4G" to NETWORK_TYPE_4G,
-        "5G" to NETWORK_TYPE_5G,
-        "WiFi" to NETWORK_TYPE_WIFI
-    )
 
     // 通话相关字段
     const val FIELD_RING_DURATION = "ring_duration"
@@ -130,14 +114,11 @@ object Constants {
     const val FIELD_RING_TIME = "ring_time"
     const val FIELD_CALL_RING_DURATION = "call_ring_duration"
     const val FIELD_RING_DURATION_SECONDS = "ring_duration_seconds"
-    const val FIELD_NETWORK_TYPE = "network_type"
     const val FIELD_SIGNAL_STRENGTH = "signal_strength"
     const val FIELD_IS_REJECTED = "is_rejected"
-    const val FIELD_IS_VOIP = "is_voip"
     const val FIELD_CONFERENCE_PARTICIPANTS = "conference_participants"
 
     // 默认值
     const val DEFAULT_RING_DURATION = 15
     const val DEFAULT_SIGNAL_STRENGTH = 4
-    const val DEFAULT_NETWORK_TYPE = NETWORK_TYPE_4G
 }

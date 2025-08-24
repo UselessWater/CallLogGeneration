@@ -59,68 +59,21 @@ object CallLogGenerator {
         Log.d(TAG, "创建拒接来电记录，响铃时长: ${ringDuration}秒")
     }
     
-    /**
-     * 创建VoIP通话记录
-     */
-    fun createVoipCall(values: ContentValues, duration: Int, callType: Int = Constants.CALL_TYPE_OUTGOING,
-                      networkType: Int = Constants.DEFAULT_NETWORK_TYPE) {
-        values.put(CallLog.Calls.TYPE, callType)
-        values.put(CallLog.Calls.DURATION, duration)
-        
-        // 使用字段级降级机制设置网络类型
-        val networkTypeFields = listOf(
-            Constants.FIELD_NETWORK_TYPE,      // 标准网络类型字段
-            "network",                         // 通用网络字段
-            "connection_type",                 // 连接类型
-            "data_network_type"                // 数据网络类型
-        )
-        setFieldWithFallback(values, networkTypeFields, networkType, "网络类型")
-        
-        // 设置VoIP标识
-        val voipFields = listOf(
-            Constants.FIELD_IS_VOIP,           // VoIP标识字段
-            "is_voip_call",                    // VoIP通话标识
-            "call_technology"                  // 通话技术类型
-        )
-        setFieldWithFallback(values, voipFields, 1, "VoIP标识")
-        
-        val typeName = when (callType) {
-            Constants.CALL_TYPE_OUTGOING -> "呼出"
-            Constants.CALL_TYPE_INCOMING -> "来电"
-            else -> "未知"
-        }
-        Log.d(TAG, "创建VoIP${typeName}通话记录，网络类型: ${getNetworkTypeName(networkType)}")
-    }
     
     /**
      * 根据通话类型值创建相应的通话记录
      */
     fun createCallByType(values: ContentValues, callTypeValue: Int, duration: Int, 
-                        ringDuration: Int = Constants.DEFAULT_RING_DURATION,
-                        networkType: Int = Constants.DEFAULT_NETWORK_TYPE) {
+                        ringDuration: Int = Constants.DEFAULT_RING_DURATION) {
         when (callTypeValue) {
             Constants.CALL_TYPE_OUTGOING -> createOutgoingCall(values, duration)
             Constants.CALL_TYPE_INCOMING -> createIncomingCall(values, duration, true)
             Constants.CALL_TYPE_MISSED -> createIncomingCall(values, duration, false, ringDuration)
             Constants.CALL_TYPE_REJECTED -> createRejectedCall(values, ringDuration) // 拒接来电
-            -2 -> createVoipCall(values, duration, Constants.CALL_TYPE_OUTGOING, networkType) // VoIP通话
             else -> createOutgoingCall(values, duration) // 默认呼出电话
         }
     }
     
-    /**
-     * 获取网络类型名称
-     */
-    private fun getNetworkTypeName(networkType: Int): String {
-        return when (networkType) {
-            Constants.NETWORK_TYPE_2G -> "2G"
-            Constants.NETWORK_TYPE_3G -> "3G"
-            Constants.NETWORK_TYPE_4G -> "4G"
-            Constants.NETWORK_TYPE_5G -> "5G"
-            Constants.NETWORK_TYPE_WIFI -> "WiFi"
-            else -> "未知"
-        }
-    }
     
     /**
      * 获取通话类型名称
@@ -131,7 +84,6 @@ object CallLogGenerator {
             Constants.CALL_TYPE_INCOMING -> "来电(已接)"
             Constants.CALL_TYPE_MISSED -> "未接来电"
             Constants.CALL_TYPE_REJECTED -> "拒接来电"
-            -2 -> "VoIP通话"
             else -> "未知类型"
         }
     }
@@ -189,6 +141,9 @@ object CallLogGenerator {
                     is String -> values.put(field, value)
                     else -> values.put(field, value.toString())
                 }
+                
+                // 检查字段是否真的有效（ContentValues.put()不会立即抛出异常）
+                // 如果字段无效，会在后续操作中抛出异常
                 usedField = field
                 success = true
                 
@@ -199,7 +154,10 @@ object CallLogGenerator {
                 }
                 break
             } catch (e: Exception) {
-                // 字段不支持，继续尝试下一个
+                // 字段不支持，移除可能已设置的无效字段并继续尝试下一个
+                if (values.containsKey(field)) {
+                    values.remove(field)
+                }
                 Log.d(TAG, "字段 ${field} 不支持${fieldDescription}设置: ${e.message}")
             }
         }
@@ -213,4 +171,5 @@ object CallLogGenerator {
             Log.w(TAG, "${fieldDescription}: ${value}${valueUnit} (所有厂商字段均不支持，使用系统默认机制)")
         }
     }
+    
 }

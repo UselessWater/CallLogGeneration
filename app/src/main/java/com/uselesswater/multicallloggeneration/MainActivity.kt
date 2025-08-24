@@ -572,46 +572,6 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                             }
                         }
 
-                        // 网络类型设置（用于VoIP通话）
-                        if (currentCallTypeValue == -2) {
-                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                var networkExpanded by remember { mutableStateOf(false) }
-                                Text(
-                                    text = "网络类型:",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
-                                ExposedDropdownMenuBox(
-                                    expanded = networkExpanded,
-                                    onExpandedChange = { networkExpanded = !networkExpanded }
-                                ) {
-                                    OutlinedTextField(
-                                        value = Constants.NETWORK_TYPE_OPTIONS[selectedNetworkTypeIndex].first,
-                                        onValueChange = {},
-                                        readOnly = true,
-                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = networkExpanded) },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .menuAnchor()
-                                    )
-
-                                    ExposedDropdownMenu(
-                                        expanded = networkExpanded,
-                                        onDismissRequest = { networkExpanded = false }
-                                    ) {
-                                        Constants.NETWORK_TYPE_OPTIONS.forEachIndexed { index, (name, _) ->
-                                            DropdownMenuItem(
-                                                text = { Text(name) },
-                                                onClick = {
-                                                    selectedNetworkTypeIndex = index
-                                                    networkExpanded = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -858,7 +818,6 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
 
                                     // 使用CallLogGenerator创建不同类型的通话记录
                                     val callTypeValue = Constants.CALL_TYPE_OPTIONS[selectedCallTypeIndex].second
-                                    val networkTypeValue = Constants.NETWORK_TYPE_OPTIONS[selectedNetworkTypeIndex].second
                                     
                                     // 对于拒接来电和未接来电，duration应该为0，使用ringDuration作为响铃时长
                                     val finalDuration = if (callTypeValue in listOf(Constants.CALL_TYPE_MISSED, Constants.CALL_TYPE_REJECTED)) 0 else duration
@@ -866,8 +825,7 @@ fun CallLogGeneratorApp(contentResolver: ContentResolver, checkPermission: () ->
                                         values = this,
                                         callTypeValue = callTypeValue,
                                         duration = finalDuration,
-                                        ringDuration = ringDuration,
-                                        networkType = networkTypeValue
+                                        ringDuration = ringDuration
                                     )
 
                                     // 使用智能SIM卡适配方案：先尝试vivo逻辑，失败后降级到标准逻辑
