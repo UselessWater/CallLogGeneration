@@ -32,7 +32,7 @@
 - 🔒 **权限管理** - 完整的运行时权限请求机制
 - 📊 **实时反馈** - 生成进度和结果实时显示
 - 🔄 **高级兼容性** - 字段级降级机制，完美适配vivo及其他Android设备
-- ⚡ **通话类型支持** - 支持呼出、已接、未接、拒接、VoIP等多种通话类型，VoIP未测试。
+- ⚡ **通话类型支持** - 支持呼出、已接、未接、拒接等多种通话类型
 
 ## 🛠️ 技术栈
 
@@ -154,26 +154,34 @@ val values = ContentValues().apply {
     put(CallLog.Calls.DURATION, duration)
     put(CallLog.Calls.TYPE, callType)
     
-    // 字段级降级机制：优先vivo逻辑，失败后使用Android标准
-    // 1. SIM ID字段
+    // 字段级降级机制：优先标准Android逻辑，失败后尝试厂商特定字段
+    // 1. 先设置标准Android字段
     try {
-        put("simid", simSlot) // vivo特有字段
+        put(CallLog.Calls.PHONE_ACCOUNT_ID, phoneAccountInfo.accountId)
+        put(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, phoneAccountInfo.componentName)
     } catch (e: Exception) {
-        put(CallLog.Calls.PHONE_ACCOUNT_ID, phoneAccountInfo.accountId) // 标准字段
+        Log.e("CallLogInsert", "设置标准Android字段失败: ${e.message}")
     }
     
-    // 2. 组件名字段
+    // 2. 然后尝试厂商特定字段 (vivo/OPPO/小米等使用simid字段)
     try {
-        put("subscription_component_name", phoneAccountInfo.componentName) // vivo特有字段
+        put("simid", simSlot)
     } catch (e: Exception) {
-        put(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, phoneAccountInfo.componentName) // 标准字段
+        Log.w("CallLogInsert", "设置厂商字段simid失败: ${e.message}")
     }
     
-    // 3. 订阅ID字段
+    // 3. 处理subscription_id字段 (vivo/小米/荣耀等使用)
     try {
-        put("subscription_id", subscriptionId) // vivo特有字段
+        put("subscription_id", subscriptionId)
     } catch (e: Exception) {
-        // 可选设置其他字段
+        Log.w("CallLogInsert", "设置厂商字段subscription_id失败: ${e.message}")
+    }
+    
+    // 4. 处理subscription_component_name字段 (荣耀等使用)
+    try {
+        put("subscription_component_name", phoneAccountInfo.componentName.toString())
+    } catch (e: Exception) {
+        Log.w("CallLogInsert", "设置厂商字段subscription_component_name失败: ${e.message}")
     }
 }
 contentResolver.insert("content://call_log/calls".toUri(), values)
@@ -191,20 +199,20 @@ contentResolver.insert("content://call_log/calls".toUri(), values)
 应用采用了创新的字段级降级机制，在所有Android设备上提供最佳兼容性：
 
 #### 兼容性策略
-- **优先vivo逻辑**：在所有设备上都优先尝试vivo特有字段
-- **字段级降级**：每个字段独立尝试，失败后使用对应的Android标准字段
+- **优先标准Android逻辑**：在所有设备上都优先尝试标准Android字段
+- **字段级降级**：每个字段独立尝试，失败后使用厂商特定字段
 - **智能回退**：确保至少设置基本的Android标准字段
 
 #### 字段映射关系
-| Vivo特有字段 | Android标准字段 | 描述 |
-|-------------|----------------|------|
-| `simid` | `PHONE_ACCOUNT_ID` | SIM卡标识字段 |
-| `subscription_component_name` | `PHONE_ACCOUNT_COMPONENT_NAME` | 组件名称字段 |
-| `subscription_id` | - | 订阅ID字段（无直接对应） |
+| 厂商特定字段 | Android标准字段 | 支持厂商 | 描述 |
+|-------------|----------------|----------|------|
+| `simid` | `PHONE_ACCOUNT_ID` | vivo, OPPO, 小米等 | SIM卡标识字段 |
+| `subscription_component_name` | `PHONE_ACCOUNT_COMPONENT_NAME` | 荣耀, vivo等 | 组件名称字段 |
+| `subscription_id` | - | vivo, 小米, 荣耀等 | 订阅ID字段 |
 
-#### vivo设备完美适配
-针对vivo Origin OS 5 (Android 15) 的深度优化：
-- ✅ 所有vivo特有字段正常工作
+#### 多厂商设备完美适配
+针对vivo、OPPO、小米、荣耀、三星等厂商设备的深度优化：
+- ✅ 支持各厂商特有的SIM卡标识字段
 - ✅ SIM卡标识正确显示
 - ✅ 完整的通话记录功能
 
@@ -271,6 +279,6 @@ contentResolver.insert("content://call_log/calls".toUri(), values)
 
 ---
 
-**注意**: 本工具由苏哥推出，请遵守相关法律法规，合理使用。作者：UselessWater
+**注意**: 本工具由苏廷洪推出，请遵守相关法律法规，合理使用。作者：UselessWater
 
-*最后更新: 2025年8月23日*
+*最后更新: 2025年8月25日*
