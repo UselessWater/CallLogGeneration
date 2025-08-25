@@ -7,6 +7,9 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Bundle
 import android.provider.CallLog
+import android.telecom.PhoneAccountHandle
+import android.telecom.PhoneAccount
+import android.telecom.TelecomManager
 
 import android.telephony.SubscriptionManager
 import android.util.Log
@@ -45,9 +48,9 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
@@ -1307,9 +1310,9 @@ private fun putSimCardFieldsWithFallback(
     phoneAccountInfo: PhoneAccountInfo,
     context: Context
 ) {
-    // 字段级降级机制：对每个字段优先尝试标准Android逻辑，然后尝试厂商特定字段
+    // 基于设备配置的字段适配机制
     
-    // 1. 先设置标准Android字段
+    // 1. 先尝试标准Android字段
     try {
         values.put(CallLog.Calls.PHONE_ACCOUNT_ID, phoneAccountInfo.accountId)
         values.put(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, phoneAccountInfo.componentName)
@@ -1318,30 +1321,39 @@ private fun putSimCardFieldsWithFallback(
         Log.e(Constants.TAG_SIM_ADAPTER, "设置标准Android字段失败: ${e.message}")
     }
     
-    // 2. 然后尝试厂商特定字段 (vivo/OPPO/小米等使用simid字段)
-    try {
-        values.put(Constants.SIM_ID_FIELD, simSlot)
-        Log.d(Constants.TAG_SIM_ADAPTER, "使用厂商特定字段: ${Constants.SIM_ID_FIELD}=$simSlot")
-    } catch (e: Exception) {
-        Log.w(Constants.TAG_SIM_ADAPTER, "设置厂商字段${Constants.SIM_ID_FIELD}失败: ${e.message}")
-    }
+    // 2. 根据设备配置尝试厂商特定字段
+    val deviceConfig = DeviceFieldConfig.getCurrentDeviceConfig()
     
-    // 3. 处理subscription_id字段 (vivo/小米/荣耀等使用)
-    try {
-        val subscriptionId = getSubscriptionId(context, simSlot)
-        if (subscriptionId >= 0) {
-            values.put(Constants.SUBSCRIPTION_ID_FIELD, subscriptionId)
-            Log.d(Constants.TAG_SIM_ADAPTER, "使用厂商特定字段: ${Constants.SUBSCRIPTION_ID_FIELD}=$subscriptionId")
+    // 尝试simid字段（如果设备支持）
+    if (deviceConfig.supportedSimFields.contains("simid")) {
+        try {
+            values.put("simid", simSlot)
+            Log.d(Constants.TAG_SIM_ADAPTER, "使用厂商特定字段: simid=$simSlot")
+        } catch (e: Exception) {
+            Log.w(Constants.TAG_SIM_ADAPTER, "设置厂商字段simid失败: ${e.message}")
         }
-    } catch (e: Exception) {
-        Log.w(Constants.TAG_SIM_ADAPTER, "设置厂商字段${Constants.SUBSCRIPTION_ID_FIELD}失败: ${e.message}")
     }
     
-    // 4. 处理subscription_component_name字段 (荣耀等使用)
-    try {
-        values.put(Constants.SUBSCRIPTION_COMPONENT_NAME_FIELD, phoneAccountInfo.componentName.toString())
-        Log.d(Constants.TAG_SIM_ADAPTER, "使用厂商特定字段: ${Constants.SUBSCRIPTION_COMPONENT_NAME_FIELD}=${phoneAccountInfo.componentName}")
-    } catch (e: Exception) {
-        Log.w(Constants.TAG_SIM_ADAPTER, "设置厂商字段${Constants.SUBSCRIPTION_COMPONENT_NAME_FIELD}失败: ${e.message}")
+    // 尝试subscription_id字段（如果设备支持）
+    if (deviceConfig.supportedSimFields.contains("subscription_id")) {
+        try {
+            val subscriptionId = getSubscriptionId(context, simSlot)
+            if (subscriptionId >= 0) {
+                values.put("subscription_id", subscriptionId)
+                Log.d(Constants.TAG_SIM_ADAPTER, "使用厂商特定字段: subscription_id=$subscriptionId")
+            }
+        } catch (e: Exception) {
+            Log.w(Constants.TAG_SIM_ADAPTER, "设置厂商字段subscription_id失败: ${e.message}")
+        }
+    }
+    
+    // 尝试subscription_component_name字段（如果设备支持）
+    if (deviceConfig.supportedSimFields.contains("subscription_component_name")) {
+        try {
+            values.put("subscription_component_name", phoneAccountInfo.componentName.toString())
+            Log.d(Constants.TAG_SIM_ADAPTER, "使用厂商特定字段: subscription_component_name=${phoneAccountInfo.componentName}")
+        } catch (e: Exception) {
+            Log.w(Constants.TAG_SIM_ADAPTER, "设置厂商字段subscription_component_name失败: ${e.message}")
+        }
     }
 }

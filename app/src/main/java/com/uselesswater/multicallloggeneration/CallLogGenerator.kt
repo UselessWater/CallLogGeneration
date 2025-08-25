@@ -47,13 +47,13 @@ object CallLogGenerator {
         
         // 使用字段级降级机制设置拒接原因
         val missedReasonFields = listOf(
-            Constants.FIELD_MISSED_REASON,           // vivo特有字段
+            Constants.FIELD_MISSED_REASON,           // 通用字段
             "reject_reason",                         // 其他厂商可能使用的字段
             "call_reject_reason",                    // 通话拒接原因
             Constants.FIELD_IS_REJECTED,             // 拒接标识字段
             "reason"                                 // 通用原因字段（降级）
         )
-        setFieldWithFallback(values, missedReasonFields, "rejected", "拒接原因")
+        setFieldWithFallback(values, missedReasonFields, "rejected", "拒接原因", "", FieldType.MISSED_REASON_FIELD)
         
         setRingDurationField(values, ringDuration, "拒接来电")
         Log.d(TAG, "创建拒接来电记录，响铃时长: ${ringDuration}秒")
@@ -92,38 +92,12 @@ object CallLogGenerator {
      * 智能设置响铃时长字段，支持多厂商字段级降级
      */
     private fun setRingDurationField(values: ContentValues, ringDuration: Int, callType: String) {
-        // 厂商特定的响铃时长字段列表（按优先级排序）
-        val vendorSpecificFields = listOf(
-            // vivo特有字段
-            Constants.FIELD_RECORD_DURATION,      // 录音时长，可能是响铃时长
-            Constants.FIELD_MISSED_REASON,        // 未接原因，可能包含响铃信息
-            
-            // 其他厂商可能使用的字段
-            Constants.FIELD_RING_DURATION,        // 标准响铃时长字段
-            Constants.FIELD_RING_TIME,            // 响铃时间
-            Constants.FIELD_CALL_RING_DURATION,   // 通话响铃时长
-            Constants.FIELD_RING_DURATION_SECONDS, // 响铃时长（秒）
-            
-            // OPPO特有字段
-            Constants.FIELD_OPLUS_DATA1,          // OPPO数据字段1
-            Constants.FIELD_OPLUS_DATA2,          // OPPO数据字段2
-            
-            // 荣耀特有字段
-            Constants.FIELD_HW_ACCOUNT_ID,        // 荣耀账户ID
-            
-            // 小米特有字段
-            Constants.FIELD_CLOUD_ANTISPAM_TYPE,  // 小米云防骚扰类型
-            
-            // 三星特有字段
-            Constants.FIELD_SAMSUNG_DATA1,        // 三星数据字段1
-            Constants.FIELD_SAMSUNG_DATA2,        // 三星数据字段2
-            
-            // 通用字段（降级选项）
-            "duration"                           // 通话时长字段（最后尝试）
-        )
+        // 获取当前设备支持的响铃时长字段
+        val deviceConfig = DeviceFieldConfig.getCurrentDeviceConfig()
+        val supportedFields = deviceConfig.supportedRingDurationFields
         
-        // 使用通用字段降级方法
-        setFieldWithFallback(values, vendorSpecificFields, ringDuration, "${callType}响铃时长", "秒")
+        // 使用通用字段降级方法，只使用设备支持的字段
+        setFieldWithFallback(values, supportedFields, ringDuration, "${callType}响铃时长", "秒", FieldType.RING_DURATION_FIELD)
     }
     
     /**
@@ -133,20 +107,34 @@ object CallLogGenerator {
      * @param value 要设置的值
      * @param fieldDescription 字段描述（用于日志）
      * @param valueUnit 值单位（用于日志）
+     * @param fieldType 字段类型（用于设备配置验证）
      */
     private fun setFieldWithFallback(
         values: ContentValues,
         fieldPriorityList: List<String>,
         value: Any,
         fieldDescription: String,
-        valueUnit: String = ""
+        valueUnit: String = "",
+        fieldType: FieldType = FieldType.RING_DURATION_FIELD
     ) {
         var success = false
         var fallbackUsed = false
         var usedField = ""
         
-        // 按优先级尝试各个字段
-        for (field in fieldPriorityList) {
+        // 先过滤出设备支持的字段
+        val deviceConfig = DeviceFieldConfig.getCurrentDeviceConfig()
+        val supportedFields = fieldPriorityList.filter { field ->
+            DeviceFieldConfig.isFieldSupported(field, fieldType)
+        }
+        
+        // 如果没有支持的字段，直接返回
+        if (supportedFields.isEmpty()) {
+            Log.w(TAG, "${fieldDescription}: ${value}${valueUnit} (当前设备不支持任何相关字段)")
+            return
+        }
+        
+        // 按优先级尝试各个字段（只使用设备支持的字段）
+        for (field in supportedFields) {
             try {
                 when (value) {
                     is Int -> values.put(field, value)
@@ -160,8 +148,8 @@ object CallLogGenerator {
                 usedField = field
                 success = true
                 
-                // 检查是否是降级字段（列表中的最后一个）
-                if (field == fieldPriorityList.last()) {
+                // 检查是否是降级字段（支持字段列表中的最后一个）
+                if (field == supportedFields.last()) {
                     fallbackUsed = true
                     Log.w(TAG, "使用降级字段设置${fieldDescription}，厂商特定字段均不支持")
                 }

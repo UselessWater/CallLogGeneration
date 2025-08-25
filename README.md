@@ -171,7 +171,7 @@
 ### 技术实现细节
 
 #### 通话记录插入
-使用 `ContentResolver` 和 `CallLog.Calls` ContentProvider插入通话记录，采用先进的字段级降级机制：
+使用 `ContentResolver` 和 `CallLog.Calls` ContentProvider插入通话记录，采用基于厂商配置的字段适配机制：
 
 ```kotlin
 val values = ContentValues().apply {
@@ -180,38 +180,59 @@ val values = ContentValues().apply {
     put(CallLog.Calls.DURATION, duration)
     put(CallLog.Calls.TYPE, callType)
     
-    // 字段级降级机制：优先标准Android逻辑，失败后尝试厂商特定字段
+    // 基于厂商配置的字段适配机制
     // 1. 先设置标准Android字段
-    try {
-        put(CallLog.Calls.PHONE_ACCOUNT_ID, phoneAccountInfo.accountId)
-        put(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, phoneAccountInfo.componentName)
-    } catch (e: Exception) {
-        Log.e("CallLogInsert", "设置标准Android字段失败: ${e.message}")
-    }
+    put(CallLog.Calls.PHONE_ACCOUNT_ID, phoneAccountInfo.accountId)
+    put(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, phoneAccountInfo.componentName)
     
-    // 2. 然后尝试厂商特定字段 (vivo/OPPO/小米等使用simid字段)
-    try {
+    // 2. 根据设备配置尝试厂商特定字段
+    val deviceConfig = DeviceFieldConfig.getCurrentDeviceConfig()
+    
+    // 尝试simid字段（如果设备支持）
+    if (deviceConfig.supportedSimFields.contains("simid")) {
         put("simid", simSlot)
-    } catch (e: Exception) {
-        Log.w("CallLogInsert", "设置厂商字段simid失败: ${e.message}")
     }
     
-    // 3. 处理subscription_id字段 (vivo/小米/荣耀等使用)
-    try {
+    // 尝试subscription_id字段（如果设备支持）
+    if (deviceConfig.supportedSimFields.contains("subscription_id")) {
         put("subscription_id", subscriptionId)
-    } catch (e: Exception) {
-        Log.w("CallLogInsert", "设置厂商字段subscription_id失败: ${e.message}")
     }
     
-    // 4. 处理subscription_component_name字段 (荣耀等使用)
-    try {
+    // 尝试subscription_component_name字段（如果设备支持）
+    if (deviceConfig.supportedSimFields.contains("subscription_component_name")) {
         put("subscription_component_name", phoneAccountInfo.componentName.toString())
-    } catch (e: Exception) {
-        Log.w("CallLogInsert", "设置厂商字段subscription_component_name失败: ${e.message}")
     }
 }
 contentResolver.insert("content://call_log/calls".toUri(), values)
 ```
+
+#### 响铃时长处理
+针对不同厂商设备的响铃时长字段差异，采用基于厂商配置的智能字段选择机制：
+
+```kotlin
+// 响铃时长字段适配（基于厂商配置）
+val deviceConfig = DeviceFieldConfig.getCurrentDeviceConfig()
+val supportedRingDurationFields = deviceConfig.supportedRingDurationFields
+
+// 只使用当前设备支持的字段
+supportedRingDurationFields.forEach { field ->
+    // 尝试设置字段值
+    try {
+        put(field, ringDuration)
+        // 成功设置后退出循环
+        return@forEach
+    } catch (e: Exception) {
+        // 字段设置失败，继续尝试下一个
+    }
+}
+```
+
+#### 设备字段配置管理
+采用基于厂商和机型的静态配置确保最大兼容性：
+
+1. **预定义配置**：为各厂商机型预定义字段配置
+2. **配置验证**：在使用字段前验证设备是否支持
+3. **精确适配**：确保不会在某个机型上使用到另外一个机型的字段
 
 #### 时间处理
 使用ThreeTenABP库处理日期时间，支持时区正确的日期时间计算。
@@ -225,9 +246,10 @@ contentResolver.insert("content://call_log/calls".toUri(), values)
 应用采用了创新的字段级降级机制，在所有Android设备上提供最佳兼容性：
 
 #### 兼容性策略
-- **优先标准Android逻辑**：在所有设备上都优先尝试标准Android字段
-- **字段级降级**：每个字段独立尝试，失败后使用厂商特定字段
+- **厂商配置管理**：基于厂商和机型预定义字段配置，确保精确适配
+- **配置验证**：在使用字段前验证设备是否支持该字段
 - **智能回退**：确保至少设置基本的Android标准字段
+- **设备无关性**：通过预定义配置避免设备间字段混淆
 
 #### 字段映射关系
 | 厂商特定字段 | Android标准字段 | 支持厂商 | 描述 |
@@ -235,12 +257,18 @@ contentResolver.insert("content://call_log/calls".toUri(), values)
 | `simid` | `PHONE_ACCOUNT_ID` | vivo, OPPO, 小米等 | SIM卡标识字段 |
 | `subscription_component_name` | `PHONE_ACCOUNT_COMPONENT_NAME` | 荣耀, vivo等 | 组件名称字段 |
 | `subscription_id` | - | vivo, 小米, 荣耀等 | 订阅ID字段 |
+| `record_duration` | - | 仅vivo | 录音时长字段（可能是响铃时长） |
+| `oplus_data1`, `oplus_data2` | - | OPPO | OPPO特定数据字段 |
+| `hw_account_id` | - | 荣耀 | 荣耀账户ID字段 |
+| `cloud_antispam_type` | - | 小米 | 小米云防骚扰类型字段 |
+| `data1`, `data2` | - | 三星 | 三星特定数据字段 |
 
 #### 多厂商设备完美适配
 针对vivo、OPPO、小米、荣耀、三星等厂商设备的深度优化：
 - ✅ 支持各厂商特有的SIM卡标识字段
 - ✅ SIM卡标识正确显示
 - ✅ 完整的通话记录功能
+- ✅ 响铃时长字段按厂商适配（如vivo的record_duration字段）
 
 #### 其他Android设备兼容性
 - ✅ 自动降级到标准Android字段
