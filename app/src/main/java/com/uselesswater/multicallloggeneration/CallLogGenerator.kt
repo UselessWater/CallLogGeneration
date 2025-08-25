@@ -97,13 +97,26 @@ object CallLogGenerator {
             // vivo特有字段
             Constants.FIELD_RECORD_DURATION,      // 录音时长，可能是响铃时长
             Constants.FIELD_MISSED_REASON,        // 未接原因，可能包含响铃信息
-            Constants.SIM_ID_FIELD,               // SIM卡ID，某些厂商可能复用
             
             // 其他厂商可能使用的字段
             Constants.FIELD_RING_DURATION,        // 标准响铃时长字段
             Constants.FIELD_RING_TIME,            // 响铃时间
             Constants.FIELD_CALL_RING_DURATION,   // 通话响铃时长
             Constants.FIELD_RING_DURATION_SECONDS, // 响铃时长（秒）
+            
+            // OPPO特有字段
+            Constants.FIELD_OPLUS_DATA1,          // OPPO数据字段1
+            Constants.FIELD_OPLUS_DATA2,          // OPPO数据字段2
+            
+            // 荣耀特有字段
+            Constants.FIELD_HW_ACCOUNT_ID,        // 荣耀账户ID
+            
+            // 小米特有字段
+            Constants.FIELD_CLOUD_ANTISPAM_TYPE,  // 小米云防骚扰类型
+            
+            // 三星特有字段
+            Constants.FIELD_SAMSUNG_DATA1,        // 三星数据字段1
+            Constants.FIELD_SAMSUNG_DATA2,        // 三星数据字段2
             
             // 通用字段（降级选项）
             "duration"                           // 通话时长字段（最后尝试）

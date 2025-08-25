@@ -117,6 +117,14 @@ object Constants {
     const val FIELD_SIGNAL_STRENGTH = "signal_strength"
     const val FIELD_IS_REJECTED = "is_rejected"
     const val FIELD_CONFERENCE_PARTICIPANTS = "conference_participants"
+    
+    // 厂商特定字段
+    const val FIELD_OPLUS_DATA1 = "oplus_data1"
+    const val FIELD_OPLUS_DATA2 = "oplus_data2"
+    const val FIELD_HW_ACCOUNT_ID = "hw_account_id"
+    const val FIELD_CLOUD_ANTISPAM_TYPE = "cloud_antispam_type"
+    const val FIELD_SAMSUNG_DATA1 = "data1"
+    const val FIELD_SAMSUNG_DATA2 = "data2"
 
     // 默认值
     const val DEFAULT_RING_DURATION = 15

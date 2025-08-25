@@ -37,7 +37,12 @@ class UpdateChecker(private val context: Context) {
         val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
         return VersionInfo(
             versionName = packageInfo.versionName ?: "",
-            versionCode = packageInfo.versionCode,
+            versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                packageInfo.longVersionCode.toInt()
+            } else {
+                @Suppress("DEPRECATION")
+                packageInfo.versionCode
+            },
             isPreRelease = (packageInfo.versionName ?: "").contains("-", ignoreCase = true)
         )
     }
@@ -201,21 +206,44 @@ class UpdateChecker(private val context: Context) {
      * 解析版本号为可比较的数字
      */
     internal fun parseVersionNumber(version: String): Long {
-        val parts = version.split(".", "-").map { it.toIntOrNull() ?: 0 }
-        var result = 0L
-        
-        // 将版本号转换为可比较的长整型数字
-        // 格式: major * 10000 + minor * 100 + patch
-        for (i in parts.indices) {
-            val part = parts[i]
-            when (i) {
-                0 -> result += part.toLong() * 10_000  // 主版本
-                1 -> result += part.toLong() * 100     // 次版本
-                2 -> result += part.toLong()           // 修订版本
+        try {
+            // 移除前缀v并分割版本号
+            val cleanVersion = version.removePrefix("v")
+            val parts = cleanVersion.split(".", "-", "_").filter { it.isNotEmpty() }
+            
+            var result = 0L
+            // 格式: major * 1000000 + minor * 10000 + patch * 100 + preRelease
+            for (i in parts.indices.take(4)) {
+                val part = parts[i]
+                // 尝试解析为数字，如果失败则转换为数字代码
+                val numericValue = if (part.all { it.isDigit() }) {
+                    part.toIntOrNull() ?: 0
+                } else {
+                    // 对于非数字部分（如beta, alpha），转换为数字
+                    when {
+                        part.startsWith("alpha", ignoreCase = true) -> -3
+                        part.startsWith("beta", ignoreCase = true) -> -2
+                        part.startsWith("rc", ignoreCase = true) -> -1
+                        else -> {
+                            // 将字符串转换为数字代码
+                            part.fold(0) { acc, char -> acc * 31 + char.code }
+                        }
+                    }
+                }
+                
+                when (i) {
+                    0 -> result += numericValue.toLong() * 1_000_000  // 主版本
+                    1 -> result += numericValue.toLong() * 10_000     // 次版本
+                    2 -> result += numericValue.toLong() * 100        // 修订版本
+                    3 -> result += numericValue.toLong()              // 预发布版本
+                }
             }
+            
+            return result
+        } catch (e: Exception) {
+            Log.w(TAG, "版本号解析失败: $version, 返回默认值0", e)
+            return 0L
         }
-        
-        return result
     }
     
     /**
@@ -223,13 +251,15 @@ class UpdateChecker(private val context: Context) {
      */
     private fun isNewerVersion(release: ReleaseInfo, currentVersion: VersionInfo): Boolean {
         return try {
-            // 简单的版本比较：比较tag_name和当前版本
+            // 只有当发布版本比当前版本新时才返回true
             val releaseVersion = release.tagName.removePrefix("v")
             val currentVersionName = currentVersion.versionName
             
             compareVersions(releaseVersion, currentVersionName) > 0
         } catch (e: Exception) {
-            false
+            Log.w(TAG, "版本比较失败，假设需要更新", e)
+            // 出错时默认需要更新
+            true
         }
     }
     

@@ -115,56 +115,55 @@ class AppDownloadManager(private val context: Context) {
     private fun installApk(context: Context, downloadId: Long) {
         try {
             val query = DownloadManager.Query().setFilterById(downloadId)
-            val cursor = downloadManager.query(query)
-            
-            if (cursor.moveToFirst()) {
-                val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                    // 直接获取本地文件路径
-                    val localUriString = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
-                    val apkUri = Uri.parse(localUriString)
-                    
-                    Log.d(TAG, "下载完成，文件URI: $localUriString")
-                    
-                    // 使用FileProvider获取安全的URI
-                    val apkFile = File(apkUri.path ?: "")
-                    if (apkFile.exists()) {
-                        val contentUri = FileProvider.getUriForFile(
-                            context,
-                            getAuthority(context),
-                            apkFile
-                        )
+            downloadManager.query(query).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                        // 直接获取本地文件路径
+                        val localUriString = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
+                        val apkUri = Uri.parse(localUriString)
                         
-                        val installIntent = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(contentUri, "application/vnd.android.package-archive")
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            // 添加额外的标志以确保安装
-                            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                        }
+                        Log.d(TAG, "下载完成，文件URI: $localUriString")
                         
-                        Log.d(TAG, "启动APK安装，文件路径: ${apkFile.absolutePath}")
-                        context.startActivity(installIntent)
-                    } else {
-                        Log.e(TAG, "APK文件不存在: ${apkFile.absolutePath}")
-                        // 如果文件不存在，尝试使用DownloadManager提供的URI
-                        try {
-                            val downloadUri = downloadManager.getUriForDownloadedFile(downloadId)
-                            if (downloadUri != null) {
-                                val fallbackIntent = Intent(Intent.ACTION_VIEW).apply {
-                                    setDataAndType(downloadUri, "application/vnd.android.package-archive")
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                context.startActivity(fallbackIntent)
+                        // 使用FileProvider获取安全的URI
+                        val apkFile = File(apkUri.path ?: "")
+                        if (apkFile.exists()) {
+                            val contentUri = FileProvider.getUriForFile(
+                                context,
+                                getAuthority(context),
+                                apkFile
+                            )
+                            
+                            val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(contentUri, "application/vnd.android.package-archive")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                // 添加额外的标志以确保安装
+                                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                             }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "备用安装方案也失败", e)
+                            
+                            Log.d(TAG, "启动APK安装，文件路径: ${apkFile.absolutePath}")
+                            context.startActivity(installIntent)
+                        } else {
+                            Log.e(TAG, "APK文件不存在: ${apkFile.absolutePath}")
+                            // 如果文件不存在，尝试使用DownloadManager提供的URI
+                            try {
+                                val downloadUri = downloadManager.getUriForDownloadedFile(downloadId)
+                                if (downloadUri != null) {
+                                    val fallbackIntent = Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(downloadUri, "application/vnd.android.package-archive")
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(fallbackIntent)
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "备用安装方案也失败", e)
+                            }
                         }
                     }
                 }
             }
-            cursor.close()
         } catch (e: Exception) {
             Log.e(TAG, "安装APK失败", e)
             // 显示安装失败的提示
@@ -189,6 +188,10 @@ class AppDownloadManager(private val context: Context) {
      */
     fun downloadApkSimple(downloadUrl: String, fileName: String, onProgress: (progress: Int) -> Unit = {}, onComplete: (file: File?) -> Unit) {
         Thread {
+            var connection: HttpURLConnection? = null
+            var outputStream: FileOutputStream? = null
+            var inputStream: java.io.InputStream? = null
+            
             try {
                 val downloadDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "CallLogGeneration")
                 if (!downloadDir.exists()) {
@@ -201,14 +204,14 @@ class AppDownloadManager(private val context: Context) {
                 }
                 
                 val url = URL(downloadUrl)
-                val connection = url.openConnection() as HttpURLConnection
+                connection = url.openConnection() as HttpURLConnection
                 connection.connect()
                 
                 val contentLength = connection.contentLength
-                val inputStream = connection.inputStream
-                val outputStream = FileOutputStream(outputFile)
+                inputStream = connection.inputStream
+                outputStream = FileOutputStream(outputFile)
                 
-                val buffer = ByteArray(1024)
+                val buffer = ByteArray(4096) // 增大缓冲区以提高下载速度
                 var totalBytesRead = 0
                 var bytesRead: Int
                 
@@ -223,8 +226,7 @@ class AppDownloadManager(private val context: Context) {
                     }
                 }
                 
-                outputStream.close()
-                inputStream.close()
+                outputStream.flush()
                 
                 // 下载完成，安装APK
                 onComplete(outputFile)
@@ -232,6 +234,25 @@ class AppDownloadManager(private val context: Context) {
             } catch (e: Exception) {
                 Log.e(TAG, "前台下载失败", e)
                 onComplete(null)
+            } finally {
+                // 确保资源正确关闭
+                try {
+                    outputStream?.close()
+                } catch (e: Exception) {
+                    Log.w(TAG, "关闭输出流失败", e)
+                }
+                
+                try {
+                    inputStream?.close()
+                } catch (e: Exception) {
+                    Log.w(TAG, "关闭输入流失败", e)
+                }
+                
+                try {
+                    connection?.disconnect()
+                } catch (e: Exception) {
+                    Log.w(TAG, "断开连接失败", e)
+                }
             }
         }.start()
     }
