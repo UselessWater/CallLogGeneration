@@ -55,15 +55,41 @@
 ## 🏗️ 项目结构
 
 ```
-app/
-├── src/main/
-│   ├── java/com/uselesswater/multicallloggeneration/
-│   │   ├── MainActivity.kt      # 主活动，包含UI逻辑和业务逻辑
-│   │   ├── CallLogApplication.kt # 应用类
-│   │   └── ui/theme/            # Compose主题文件
-│   ├── res/                     # 资源文件
-│   └── AndroidManifest.xml      # 应用清单文件
-└── build.gradle.kts             # 模块构建配置
+项目根目录/
+├── app/                               # 主应用模块
+│   ├── src/main/
+│   │   ├── java/com/uselesswater/multicallloggeneration/
+│   │   │   ├── MainActivity.kt              # 主活动，包含UI和业务逻辑
+│   │   │   ├── Constants.kt                 # 常量定义类
+│   │   │   ├── CallLogApplication.kt        # 应用类
+│   │   │   ├── CallLogGenerator.kt          # 通话记录生成核心逻辑，包含字段级降级机制
+│   │   │   ├── DownloadManager.kt           # APK下载管理（包含AppDownloadManager类）
+│   │   │   ├── UpdateChecker.kt             # 更新检查
+│   │   │   ├── config/UpdateRepositoryConfig.java  # 更新配置
+│   │   │   └── ui/theme/                    # Compose主题文件
+│   │   │       ├── Color.kt
+│   │   │       ├── Theme.kt
+│   │   │       └── Type.kt
+│   │   ├── res/                            # 资源文件
+│   │   │   ├── drawable/                   # 图片资源
+│   │   │   ├── mipmap*/                    # 应用图标
+│   │   │   ├── values/                     # 字符串、颜色、主题等
+│   │   │   └── xml/                        # XML配置文件
+│   │   └── AndroidManifest.xml             # 应用清单文件
+│   ├── src/test/                           # 单元测试
+│   ├── src/androidTest/                    # 仪器测试
+│   ├── build.gradle.kts                    # 模块构建配置
+│   └── proguard-rules.pro                  # 代码混淆规则
+├── gradle/                                # Gradle配置
+│   ├── libs.versions.toml                 # 依赖版本管理
+│   └── wrapper/                           # Gradle包装器
+├── phone/                                 # 设备测试数据
+│   ├── vivo.md                            # vivo设备字段分析
+│   └── google_sdk_gphone64_x86_64.md      # Google SDK设备字段分析
+├── build.gradle.kts                       # 项目构建配置
+├── settings.gradle.kts                    # 项目设置
+├── gradle.properties                      # Gradle属性配置
+└── gradlew, gradlew.bat                   # Gradle包装器脚本
 ```
 
 ## 🎮 使用说明
@@ -279,6 +305,6 @@ contentResolver.insert("content://call_log/calls".toUri(), values)
 
 ---
 
-**注意**: 本工具由苏廷洪推出，请遵守相关法律法规，合理使用。作者：UselessWater
+**注意**: 本工具由苏兄推出，请遵守相关法律法规，合理使用。作者：UselessWater
 
 *最后更新: 2025年8月25日*

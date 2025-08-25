@@ -1,6 +1,6 @@
 # 更新日志
 
-## v2.1.1 (2025-08-25)
+## v2.2.0 (2025-08-25)
 
 ### 修复
 - 修复了 `menuAnchor()` 方法的弃用警告，使用新的 `menuAnchor(MenuAnchorType.PrimaryNotEditable, true)` 语法
