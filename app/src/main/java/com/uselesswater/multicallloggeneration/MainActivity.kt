@@ -172,6 +172,7 @@ private fun debugExistingCallLogs(contentResolver: ContentResolver) {
 
 /**
  * 获取指定SIM卡槽的SubscriptionId
+ * 增强版本，包含更好的错误处理和厂商特定逻辑
  */
 private fun getSubscriptionId(context: Context, simSlot: Int): Int {
     return try {
@@ -179,30 +180,62 @@ private fun getSubscriptionId(context: Context, simSlot: Int): Int {
         val subscriptionInfos = subscriptionManager.activeSubscriptionInfoList
 
         if (subscriptionInfos != null && subscriptionInfos.isNotEmpty()) {
+            Log.d("getSubscriptionId", "Found ${subscriptionInfos.size} active subscriptions")
+            
+            // 记录所有订阅信息以便调试
+            subscriptionInfos.forEachIndexed { index, info ->
+                Log.d("getSubscriptionId", "Subscription $index: id=${info.subscriptionId}, slot=${info.simSlotIndex}, carrier=${info.carrierName}")
+            }
+
             // simSlot是1-based，需要转换为0-based来匹配SlotIndex
             val targetSlotIndex = simSlot - Constants.DEFAULT_SIM_SLOT_INDEX_OFFSET
 
-            // 查找匹配槽位的订阅信息
-            val matchingSubscription = subscriptionInfos.find { it.simSlotIndex == targetSlotIndex }
+            // 首先尝试精确匹配
+            var matchingSubscription = subscriptionInfos.find { it.simSlotIndex == targetSlotIndex }
 
             if (matchingSubscription != null) {
-                Log.d("getSubscriptionId", "Found subscription ID ${matchingSubscription.subscriptionId} for SIM slot $simSlot (slot index: $targetSlotIndex)")
-                matchingSubscription.subscriptionId
-            } else {
-                Log.w("getSubscriptionId", "No subscription found for SIM slot $simSlot")
-                // 如果找不到指定槽位，返回第一个可用的订阅ID
-                subscriptionInfos.firstOrNull()?.subscriptionId ?: -1
+                Log.d("getSubscriptionId", "Found exact match: subscription ID ${matchingSubscription.subscriptionId} for SIM slot $simSlot (slot index: $targetSlotIndex)")
+                return matchingSubscription.subscriptionId
             }
+
+            // 如果精确匹配失败，尝试其他匹配策略
+            Log.w("getSubscriptionId", "No exact match for SIM slot $simSlot (slot index: $targetSlotIndex), trying fallback strategies")
+
+            // 策略1: 尝试直接使用simSlot作为索引（某些设备可能是1-based）
+            matchingSubscription = subscriptionInfos.find { it.simSlotIndex == simSlot }
+            if (matchingSubscription != null) {
+                Log.d("getSubscriptionId", "Found direct slot match: subscription ID ${matchingSubscription.subscriptionId} for SIM slot $simSlot")
+                return matchingSubscription.subscriptionId
+            }
+
+            // 策略2: 对于单SIM设备或OPPO等特殊设备，返回第一个有效的订阅
+            val firstValidSubscription = subscriptionInfos.find { 
+                it.subscriptionId >= 0 && it.simSlotIndex >= 0 
+            }
+            if (firstValidSubscription != null) {
+                Log.w("getSubscriptionId", "Using first valid subscription: ID ${firstValidSubscription.subscriptionId}, slot ${firstValidSubscription.simSlotIndex}")
+                return firstValidSubscription.subscriptionId
+            }
+
+            // 策略3: 如果所有策略都失败，返回第一个订阅ID（即使可能无效）
+            val fallbackSubscription = subscriptionInfos.firstOrNull()
+            if (fallbackSubscription != null) {
+                Log.w("getSubscriptionId", "Using fallback subscription: ID ${fallbackSubscription.subscriptionId}")
+                return fallbackSubscription.subscriptionId
+            }
+
+            Log.w("getSubscriptionId", "No suitable subscription found for SIM slot $simSlot")
+            return -1
         } else {
             Log.w("getSubscriptionId", "No active subscriptions found")
-            -1
+            return -1
         }
     } catch (e: SecurityException) {
         Log.e("getSubscriptionId", "SecurityException while accessing subscription info", e)
-        -1
+        return -1
     } catch (e: Exception) {
         Log.e("getSubscriptionId", "Error getting subscription ID", e)
-        -1
+        return -1
     }
 }
 
@@ -1310,25 +1343,33 @@ private fun putSimCardFieldsWithFallback(
     phoneAccountInfo: PhoneAccountInfo,
     context: Context
 ) {
-    // 基于设备配置的字段适配机制
+    // 增强的基于设备配置的字段适配机制，包含空值检查和fallback逻辑
     
     // 1. 先尝试标准Android字段
     try {
-        values.put(CallLog.Calls.PHONE_ACCOUNT_ID, phoneAccountInfo.accountId)
-        values.put(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, phoneAccountInfo.componentName)
-        Log.d(Constants.TAG_SIM_ADAPTER, "使用标准Android字段: PHONE_ACCOUNT_ID=${phoneAccountInfo.accountId}, PHONE_ACCOUNT_COMPONENT_NAME=${phoneAccountInfo.componentName}")
+        // 验证phoneAccountInfo的有效性
+        if (isValidPhoneAccountInfo(phoneAccountInfo)) {
+            values.put(CallLog.Calls.PHONE_ACCOUNT_ID, phoneAccountInfo.accountId)
+            values.put(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME, phoneAccountInfo.componentName)
+            Log.d(Constants.TAG_SIM_ADAPTER, "使用标准Android字段: PHONE_ACCOUNT_ID=${phoneAccountInfo.accountId}, PHONE_ACCOUNT_COMPONENT_NAME=${phoneAccountInfo.componentName}")
+        } else {
+            Log.w(Constants.TAG_SIM_ADAPTER, "PhoneAccountInfo无效，跳过标准Android字段设置")
+        }
     } catch (e: Exception) {
         Log.e(Constants.TAG_SIM_ADAPTER, "设置标准Android字段失败: ${e.message}")
     }
     
     // 2. 根据设备配置尝试厂商特定字段
     val deviceConfig = DeviceFieldConfig.getCurrentDeviceConfig()
+    Log.d(Constants.TAG_SIM_ADAPTER, "当前设备配置: ${deviceConfig.description}")
     
     // 尝试simid字段（如果设备支持）
     if (deviceConfig.supportedSimFields.contains("simid")) {
         try {
-            values.put("simid", simSlot)
-            Log.d(Constants.TAG_SIM_ADAPTER, "使用厂商特定字段: simid=$simSlot")
+            // 对于某些设备，simid可能为-1表示无效，需要处理
+            val effectiveSimId = if (simSlot > 0) simSlot else 1  // 确保simid至少为1
+            values.put("simid", effectiveSimId)
+            Log.d(Constants.TAG_SIM_ADAPTER, "使用厂商特定字段: simid=$effectiveSimId (原始: $simSlot)")
         } catch (e: Exception) {
             Log.w(Constants.TAG_SIM_ADAPTER, "设置厂商字段simid失败: ${e.message}")
         }
@@ -1337,10 +1378,24 @@ private fun putSimCardFieldsWithFallback(
     // 尝试subscription_id字段（如果设备支持）
     if (deviceConfig.supportedSimFields.contains("subscription_id")) {
         try {
-            val subscriptionId = getSubscriptionId(context, simSlot)
-            if (subscriptionId >= 0) {
+            val subscriptionId = getSubscriptionIdSafely(context, simSlot)
+            if (subscriptionId != null && subscriptionId >= 0) {
                 values.put("subscription_id", subscriptionId)
                 Log.d(Constants.TAG_SIM_ADAPTER, "使用厂商特定字段: subscription_id=$subscriptionId")
+            } else {
+                Log.w(Constants.TAG_SIM_ADAPTER, "subscription_id无效($subscriptionId)，尝试fallback方案")
+                // Fallback: 使用phoneAccountInfo.accountId作为subscription_id
+                if (isValidAccountId(phoneAccountInfo.accountId)) {
+                    try {
+                        val accountIdAsInt = phoneAccountInfo.accountId.toIntOrNull()
+                        if (accountIdAsInt != null && accountIdAsInt >= 0) {
+                            values.put("subscription_id", accountIdAsInt)
+                            Log.d(Constants.TAG_SIM_ADAPTER, "使用accountId作为subscription_id: $accountIdAsInt")
+                        }
+                    } catch (e: Exception) {
+                        Log.d(Constants.TAG_SIM_ADAPTER, "accountId转换为subscription_id失败: ${e.message}")
+                    }
+                }
             }
         } catch (e: Exception) {
             Log.w(Constants.TAG_SIM_ADAPTER, "设置厂商字段subscription_id失败: ${e.message}")
@@ -1350,10 +1405,94 @@ private fun putSimCardFieldsWithFallback(
     // 尝试subscription_component_name字段（如果设备支持）
     if (deviceConfig.supportedSimFields.contains("subscription_component_name")) {
         try {
-            values.put("subscription_component_name", phoneAccountInfo.componentName.toString())
-            Log.d(Constants.TAG_SIM_ADAPTER, "使用厂商特定字段: subscription_component_name=${phoneAccountInfo.componentName}")
+            val componentName = phoneAccountInfo.componentName
+            if (isValidComponentName(componentName)) {
+                values.put("subscription_component_name", componentName)
+                Log.d(Constants.TAG_SIM_ADAPTER, "使用厂商特定字段: subscription_component_name=$componentName")
+            } else {
+                Log.w(Constants.TAG_SIM_ADAPTER, "componentName无效，跳过subscription_component_name设置")
+            }
         } catch (e: Exception) {
             Log.w(Constants.TAG_SIM_ADAPTER, "设置厂商字段subscription_component_name失败: ${e.message}")
         }
+    }
+    
+    // 尝试华为/荣耀特有的hw_account_id字段
+    if (deviceConfig.supportedSimFields.contains("hw_account_id")) {
+        try {
+            // 对于华为/荣耀设备，尝试设置hw_account_id
+            val hwAccountId = getHuaweiAccountId(context, simSlot)
+            if (hwAccountId != null) {
+                values.put("hw_account_id", hwAccountId)
+                Log.d(Constants.TAG_SIM_ADAPTER, "使用华为特定字段: hw_account_id=$hwAccountId")
+            }
+        } catch (e: Exception) {
+            Log.w(Constants.TAG_SIM_ADAPTER, "设置华为字段hw_account_id失败: ${e.message}")
+        }
+    }
+    
+    Log.d(Constants.TAG_SIM_ADAPTER, "SIM卡字段设置完成，设备: ${deviceConfig.description}")
+}
+
+/**
+ * 验证PhoneAccountInfo是否有效
+ */
+private fun isValidPhoneAccountInfo(phoneAccountInfo: PhoneAccountInfo?): Boolean {
+    return phoneAccountInfo != null && 
+           isValidAccountId(phoneAccountInfo.accountId) && 
+           isValidComponentName(phoneAccountInfo.componentName)
+}
+
+/**
+ * 验证accountId是否有效
+ */
+private fun isValidAccountId(accountId: String?): Boolean {
+    return !accountId.isNullOrBlank() && 
+           accountId.lowercase() != "null" && 
+           accountId != "-1"
+}
+
+/**
+ * 验证componentName是否有效
+ */
+private fun isValidComponentName(componentName: String?): Boolean {
+    return !componentName.isNullOrBlank() && 
+           componentName.lowercase() != "null" &&
+           componentName.contains("/")  // 有效的ComponentName应该包含"/"
+}
+
+/**
+ * 安全地获取SubscriptionId，包含错误处理和NULL值检查
+ */
+private fun getSubscriptionIdSafely(context: Context, simSlot: Int): Int? {
+    return try {
+        val subscriptionId = getSubscriptionId(context, simSlot)
+        if (subscriptionId >= 0) {
+            subscriptionId
+        } else {
+            Log.w(Constants.TAG_SIM_ADAPTER, "getSubscriptionId返回无效值: $subscriptionId")
+            null
+        }
+    } catch (e: Exception) {
+        Log.w(Constants.TAG_SIM_ADAPTER, "获取SubscriptionId异常: ${e.message}")
+        null
+    }
+}
+
+/**
+ * 获取华为设备的账户ID（如果可用）
+ */
+private fun getHuaweiAccountId(context: Context, simSlot: Int): String? {
+    return try {
+        // 对于华为/荣耀设备，hw_account_id通常与subscription_id相关
+        val subscriptionId = getSubscriptionIdSafely(context, simSlot)
+        if (subscriptionId != null && subscriptionId >= 0) {
+            "hw_$subscriptionId"  // 构造华为格式的账户ID
+        } else {
+            null
+        }
+    } catch (e: Exception) {
+        Log.w(Constants.TAG_SIM_ADAPTER, "获取华为账户ID失败: ${e.message}")
+        null
     }
 }

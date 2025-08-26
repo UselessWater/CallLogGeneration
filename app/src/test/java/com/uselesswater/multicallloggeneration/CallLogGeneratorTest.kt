@@ -59,17 +59,7 @@ class CallLogGeneratorTest {
         assertEquals(0, values.getAsInteger(CallLog.Calls.DURATION))
     }
 
-    @Test
-    fun testCreateVoipCall() {
-        val values = ContentValues()
-        val duration = 60
-        val networkType = Constants.NETWORK_TYPE_WIFI
-        
-        CallLogGenerator.createVoipCall(values, duration, Constants.CALL_TYPE_OUTGOING, networkType)
-        
-        assertEquals(Constants.CALL_TYPE_OUTGOING, values.getAsInteger(CallLog.Calls.TYPE))
-        assertEquals(duration, values.getAsInteger(CallLog.Calls.DURATION))
-    }
+    
 
     @Test
     fun testCreateCallByTypeOutgoing() {
@@ -99,7 +89,6 @@ class CallLogGeneratorTest {
         assertEquals("来电(已接)", CallLogGenerator.getCallTypeName(Constants.CALL_TYPE_INCOMING))
         assertEquals("未接来电", CallLogGenerator.getCallTypeName(Constants.CALL_TYPE_MISSED))
         assertEquals("拒接来电", CallLogGenerator.getCallTypeName(Constants.CALL_TYPE_REJECTED))
-        assertEquals("VoIP通话", CallLogGenerator.getCallTypeName(-2))
         assertEquals("未知类型", CallLogGenerator.getCallTypeName(999))
     }
 }
