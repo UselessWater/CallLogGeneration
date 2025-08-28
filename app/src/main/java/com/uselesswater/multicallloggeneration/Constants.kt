@@ -14,25 +14,15 @@ object Constants {
     // 日志标签
     const val TAG_MAIN_ACTIVITY = "MainActivity"
     const val TAG_DEBUG_CALL_LOG = "DebugCallLog"
-    const val TAG_GET_SUBSCRIPTION_ID = "getSubscriptionId"
-    const val TAG_CALL_LOG_GENERATOR = "CallLogGeneratorApp"
-    const val TAG_CALL_LOG_INSERT = "CallLogInsert"
     const val TAG_SIM_ADAPTER = "SIMAdapter"
-    const val TAG_GET_PHONE_ACCOUNT_INFO = "getPhoneAccountInfo"
-    
+
     // 内容提供者URI
     const val CALL_LOG_URI = "content://call_log/calls"
     const val CALL_LOG_SORT_ORDER = "date DESC"
-    
-    // SIM卡相关
-    const val SIM_SLOT_DEFAULT = 1
-    const val SIM_SLOT_SECOND = 2
+
     const val SIM_OPTION_SIM1 = "SIM 1"
     const val SIM_OPTION_SIM2 = "SIM 2"
-    const val SIM_ID_FIELD = "simid"
-    const val SUBSCRIPTION_COMPONENT_NAME_FIELD = "subscription_component_name"
-    const val SUBSCRIPTION_ID_FIELD = "subscription_id"
-    
+
     // 时间范围配置
     const val TIME_RANGE_SHORT_MIN = 15
     const val TIME_RANGE_SHORT_MAX = 60
@@ -87,9 +77,7 @@ object Constants {
         "account_name", "subscription_component_name", "phone_account_id",
         "sim_index", "sim_number", "sim_slot_index"
     )
-    
-    // 默认值
-    const val DEFAULT_SUBSCRIPTION_ID = -1
+
     const val DEFAULT_SIM_SLOT_INDEX_OFFSET = 1
 
     // 通话类型常量
@@ -97,28 +85,14 @@ object Constants {
     const val CALL_TYPE_OUTGOING = 2
     const val CALL_TYPE_MISSED = 3
     const val CALL_TYPE_REJECTED = 5
+    // 呼出未接通（支持该功能的所有设备通用），使用6作为自定义类型值
+    const val CALL_TYPE_OUTGOING_UNANSWERED = 6
+    // vivo设备呼出未接通，使用2作为类型值
+    const val CALL_TYPE_VIVO_OUTGOING_UNANSWERED = 2
 
-    // 通话类型选项
-    val CALL_TYPE_OPTIONS = listOf(
-        "呼出电话" to CALL_TYPE_OUTGOING,
-        "来电(已接)" to CALL_TYPE_INCOMING,
-        "未接来电" to CALL_TYPE_MISSED,
-        "拒接来电" to CALL_TYPE_REJECTED
-    )
-
-
-    // 通话相关字段
-    const val FIELD_RING_DURATION = "ring_duration"
-    const val FIELD_RECORD_DURATION = "record_duration"
     const val FIELD_MISSED_REASON = "missed_reason"
-    const val FIELD_RING_TIME = "ring_time"
-    const val FIELD_CALL_RING_DURATION = "call_ring_duration"
-    const val FIELD_RING_DURATION_SECONDS = "ring_duration_seconds"
-    const val FIELD_SIGNAL_STRENGTH = "signal_strength"
     const val FIELD_IS_REJECTED = "is_rejected"
-    const val FIELD_CONFERENCE_PARTICIPANTS = "conference_participants"
 
     // 默认值
     const val DEFAULT_RING_DURATION = 15
-    const val DEFAULT_SIGNAL_STRENGTH = 4
 }

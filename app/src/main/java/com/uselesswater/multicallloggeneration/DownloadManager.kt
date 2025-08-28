@@ -4,16 +4,14 @@ import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.net.Uri
 import android.os.Environment
 import android.util.Log
-import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import androidx.core.net.toUri
 
 /**
  * APK下载管理器
@@ -32,57 +30,7 @@ class AppDownloadManager(private val context: Context) {
     }
     
     private var downloadId: Long = -1
-    
-    /**
-     * 下载APK文件
-     */
-    fun downloadApk(downloadUrl: String, fileName: String): Long {
-        // 使用应用私有目录，避免权限问题
-        val downloadDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "CallLogGeneration")
-        if (!downloadDir.exists()) {
-            downloadDir.mkdirs()
-        }
-        
-        // 删除旧文件（如果存在）
-        val outputFile = File(downloadDir, fileName)
-        if (outputFile.exists()) {
-            outputFile.delete()
-        }
-        
-        val request = DownloadManager.Request(Uri.parse(downloadUrl)).apply {
-            setTitle("通话记录生成工具更新")
-            setDescription("正在下载新版本")
-            // 设置为可见通知，非后台下载
-            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-            setDestinationUri(Uri.fromFile(outputFile))
-            setAllowedOverMetered(true)
-            setAllowedOverRoaming(true)
-            // 允许扫描媒体文件
-            setAllowedOverRoaming(true)
-        }
-        
-        downloadId = downloadManager.enqueue(request)
-        Log.d(TAG, "开始下载APK，下载ID: $downloadId，保存路径: ${outputFile.absolutePath}")
-        
-        // 注册下载完成广播接收器
-        registerDownloadReceiver()
-        
-        return downloadId
-    }
-    
-    /**
-     * 注册下载完成广播接收器
-     */
-    private fun registerDownloadReceiver() {
-        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-        ContextCompat.registerReceiver(
-            context,
-            downloadReceiver,
-            filter,
-            ContextCompat.RECEIVER_NOT_EXPORTED
-        )
-    }
-    
+
     /**
      * 取消注册广播接收器
      */
@@ -121,7 +69,7 @@ class AppDownloadManager(private val context: Context) {
                     if (status == DownloadManager.STATUS_SUCCESSFUL) {
                         // 直接获取本地文件路径
                         val localUriString = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
-                        val apkUri = Uri.parse(localUriString)
+                        val apkUri = localUriString.toUri()
                         
                         Log.d(TAG, "下载完成，文件URI: $localUriString")
                         
@@ -221,7 +169,7 @@ class AppDownloadManager(private val context: Context) {
                     
                     // 更新进度
                     if (contentLength > 0) {
-                        val progress = (totalBytesRead * 100 / contentLength).toInt()
+                        val progress = (totalBytesRead * 100 / contentLength)
                         onProgress(progress)
                     }
                 }
@@ -288,69 +236,5 @@ class AppDownloadManager(private val context: Context) {
         }
     }
 
-    /**
-     * 测试下载和安装功能
-     */
-    fun testDownloadAndInstall() {
-        // 这里可以添加一个测试下载链接
-        val testUrl = "https://example.com/test.apk" // 替换为实际的测试URL
-        val fileName = "test_app.apk"
-        
-        downloadApkSimple(
-            downloadUrl = testUrl,
-            fileName = fileName,
-            onProgress = { progress ->
-                Log.d(TAG, "测试下载进度: $progress%")
-            },
-            onComplete = { file ->
-                if (file != null) {
-                    Log.d(TAG, "测试下载完成，开始安装")
-                    installApkFile(file)
-                } else {
-                    Log.e(TAG, "测试下载失败")
-                }
-            }
-        )
-    }
-    
-    /**
-     * 获取下载状态
-     */
-    fun getDownloadStatus(): DownloadStatus {
-        if (downloadId == -1L) {
-            return DownloadStatus.Idle
-        }
-        
-        val query = DownloadManager.Query().setFilterById(downloadId)
-        val cursor = downloadManager.query(query)
-        
-        return try {
-            if (cursor.moveToFirst()) {
-                val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                val bytesDownloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-                val totalSize = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-                
-                when (status) {
-                    DownloadManager.STATUS_RUNNING -> DownloadStatus.Downloading(bytesDownloaded, totalSize)
-                    DownloadManager.STATUS_SUCCESSFUL -> DownloadStatus.Completed
-                    DownloadManager.STATUS_FAILED -> DownloadStatus.Failed
-                    else -> DownloadStatus.Idle
-                }
-            } else {
-                DownloadStatus.Idle
-            }
-        } finally {
-            cursor.close()
-        }
-    }
 }
 
-/**
- * 下载状态
- */
-sealed class DownloadStatus {
-    object Idle : DownloadStatus()
-    data class Downloading(val bytesDownloaded: Long, val totalSize: Long) : DownloadStatus()
-    object Completed : DownloadStatus()
-    object Failed : DownloadStatus()
-}

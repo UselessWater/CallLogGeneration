@@ -100,7 +100,7 @@ class UpdateChecker(private val context: Context) {
                 throw IOException("HTTP错误: ${response.code}")
             }
             
-            val responseBody = response.body?.string() ?: ""
+            val responseBody = response.body.string()
             return parseReleases(responseBody)
         }
     }

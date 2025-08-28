@@ -45,8 +45,8 @@ object DeviceFieldConfig {
     private fun getVivoConfig(model: String): DeviceFieldConfiguration {
         return DeviceFieldConfiguration(
             supportedSimFields = listOf(
-                "simid",
-                "subscription_id",
+                "simid",                    // vivo主要使用simid
+                "subscription_id",          // 作为降级选项
                 "subscription_component_name"
             ),
             supportedRingDurationFields = listOf(
@@ -82,6 +82,10 @@ object DeviceFieldConfig {
     
     /**
      * OPPO设备字段配置
+     * 根据实际设备数据分析：
+     * - ring_time字段存在但值为NULL，实际不使用
+     * - 使用duration字段存储响铃时长（拒接电话type=5时duration=5秒即为响铃时长）
+     * - oplus_data1和oplus_data2存在但值为NULL
      */
     private fun getOppoConfig(model: String): DeviceFieldConfiguration {
         return DeviceFieldConfiguration(
@@ -90,18 +94,20 @@ object DeviceFieldConfig {
                 "subscription_id"           // 作为降级选项，但可能为NULL
             ),
             supportedRingDurationFields = listOf(
-                "missed_reason",
-                "ring_time",               // OPPO特有的响铃时间字段
-                "ring_duration",
-                "oplus_data1",             // OPPO特有字段
-                "oplus_data2"              // OPPO特有字段
+                "duration",                // OPPO实际使用duration字段存储响铃时长（优先级最高）
+                "missed_reason",           // 未接原因字段
+                "ring_time",               // OPPO特有字段但实际未使用（值为NULL）
+                "oplus_data1",             // OPPO特有字段但实际未使用（值为NULL）
+                "oplus_data2",             // OPPO特有字段但实际未使用（值为NULL）
+                "ring_duration"            // 通用字段作为兜底
             ),
-            description = "OPPO设备"
+            description = "OPPO设备（实际使用duration字段）"
         )
     }
     
     /**
      * 华为设备字段配置
+     * 华为设备与荣耀设备类似，预期有ring_times字段
      */
     private fun getHuaweiConfig(model: String): DeviceFieldConfiguration {
         return DeviceFieldConfiguration(
@@ -111,54 +117,68 @@ object DeviceFieldConfig {
                 "hw_account_id"             // 华为特有账户字段
             ),
             supportedRingDurationFields = listOf(
-                "missed_reason",
-                "ring_times",               // 华为使用ring_times而非ring_time
-                "ring_duration",
-                "ring_time"
+                "duration",                 // 华为预期使用duration字段存储响铃时长（优先级最高）
+                "ring_times",               // 华为特有字段（响铃次数）
+                "missed_reason",            // 未接原因字段
+                "ring_duration",            // 通用字段作为兜底
+                "ring_time"                 // 通用字段作为兜底
             ),
-            description = "华为设备"
+            description = "华为设备（预期使用duration字段，支持ring_times）"
         )
     }
     
     /**
      * 荣耀设备字段配置
+     * 根据实际设备数据分析：
+     * - 支持subscription_id字段但可能为NULL
+     * - 有特有的ring_times字段（响铃次数，值为1），可能可以用作响铃时长
+     * - hw_account_id字段存在但值为NULL
      */
     private fun getHonorConfig(model: String): DeviceFieldConfiguration {
         return DeviceFieldConfiguration(
             supportedSimFields = listOf(
-                "subscription_id",          // 荣耀设备支持subscription_id
+                "subscription_id",          // 荣耀设备支持subscription_id但可能为NULL
                 "subscription_component_name",
-                "hw_account_id"             // 荣耀特有账户字段
+                "hw_account_id"             // 荣耀特有账户字段但实际未使用（值为NULL）
             ),
             supportedRingDurationFields = listOf(
-                "missed_reason",
-                "ring_times",               // 荣耀使用ring_times字段
-                "ring_duration",
-                "ring_time"
+                "duration",                 // 荣耀实际使用duration字段存储响铃时长（优先级最高）
+                "ring_times",               // 荣耀特有字段（响铃次数，值为1）
+                "missed_reason",            // 未接原因字段
+                "ring_duration",            // 通用字段作为兜底
+                "ring_time"                 // 通用字段作为兜底
             ),
-            description = "荣耀设备"
+            description = "荣耀设备（使用duration字段，支持ring_times）"
         )
     }
     
     /**
      * 三星设备字段配置
+     * 根据实际设备数据分析：
+     * - 只有标准Android字段，没有厂商特有字段
+     * - 使用duration字段存储响铃时长（拒接电话type=5时duration=5秒即为响铃时长）
+     * - data1、data2、data3、data4字段存在但值均为NULL
      */
     private fun getSamsungConfig(model: String): DeviceFieldConfiguration {
         return DeviceFieldConfiguration(
-            supportedSimFields = listOf(),  // 三星基本不使用特殊SIM字段
+            supportedSimFields = listOf(),  // 三星基本不使用特殊SIM字段，subscription_id也为NULL
             supportedRingDurationFields = listOf(
-                "missed_reason",
-                "ring_duration",
-                "ring_time",
-                "data1",  // 三星特有字段
-                "data2"   // 三星特有字段
+                "duration",                // 三星实际使用duration字段存储响铃时长（优先级最高）
+                "missed_reason",           // 未接原因字段
+                "data1",                   // 三星特有字段但实际未使用（值为NULL）
+                "data2",                   // 三星特有字段但实际未使用（值为NULL）
+                "data3",                   // 三星特有字段但实际未使用（值为NULL）
+                "data4",                   // 三星特有字段但实际未使用（值为NULL）
+                "ring_duration",           // 通用字段作为兜底
+                "ring_time"                // 通用字段作为兜底
             ),
-            description = "三星设备"
+            description = "三星设备（实际使用duration字段）"
         )
     }
     
     /**
      * 默认配置（Google原生Android等）
+     * 包含所有可能的响铃时长字段，以提高对未知厂商设备的兼容性
      */
     private fun getDefaultConfig(): DeviceFieldConfiguration {
         return DeviceFieldConfiguration(
@@ -167,11 +187,23 @@ object DeviceFieldConfig {
                 "subscription_component_name"
             ),
             supportedRingDurationFields = listOf(
+                "duration",                // 标准duration字段
                 "missed_reason",
                 "ring_duration",
-                "ring_time"
+                "ring_time",
+                "ring_times",              // 华为/荣耀使用的响铃次数字段
+                "call_ring_duration",      // 可能的通话响铃时长字段
+                "ring_duration_seconds",   // 以秒为单位的响铃时长字段
+                "record_duration",         // vivo特有字段
+                "oplus_data1",             // OPPO特有字段
+                "oplus_data2",             // OPPO特有字段
+                "data1",                   // 三星特有字段
+                "data2",                   // 三星特有字段
+                "hw_ring_times",           // 华为特有字段
+                "cloud_antispam_type",     // 小米特有字段
+                "cloud_antispam_type_tag"  // 小米反垃圾标签字段
             ),
-            description = "标准Android设备"
+            description = "标准Android设备（包含所有可能字段以提高兼容性）"
         )
     }
     
@@ -212,34 +244,7 @@ object DeviceFieldConfig {
                fieldName.matches(Regex("^[a-zA-Z_][a-zA-Z0-9_]*$")) &&
                commonFieldPatterns.any { pattern -> fieldName.lowercase().contains(pattern) }
     }
-    
-    /**
-     * 获取运行时字段支持情况（通过查询现有通话记录）
-     * 这个方法可以在应用启动时调用以更新设备配置
-     */
-    fun detectRuntimeFieldSupport(context: android.content.Context): Set<String> {
-        val detectedFields = mutableSetOf<String>()
-        
-        try {
-            val contentResolver = context.contentResolver
-            val cursor = contentResolver.query(
-                android.provider.CallLog.Calls.CONTENT_URI,
-                null,
-                null,
-                null,
-                "${android.provider.CallLog.Calls.DATE} DESC LIMIT 1"
-            )
-            
-            cursor?.use {
-                val columnNames = it.columnNames
-                detectedFields.addAll(columnNames)
-            }
-        } catch (e: Exception) {
-            android.util.Log.w("DeviceFieldConfig", "无法检测运行时字段支持: ${e.message}")
-        }
-        
-        return detectedFields
-    }
+
 }
 
 /**
