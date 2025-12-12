@@ -1,7 +1,9 @@
 # 通话记录生成工具 v3.0.0
 
 一个使用Jetpack Compose构建的Android应用，用于批量生成通话记录，支持多SIM卡选择和自定义时间设置。采用**四级安全验证机制**，彻底解决数据库约束冲突问题，完美适配所有主流Android设备，支持Android 5.1及以上版本。
-
+github上apk没有打包最新，请到：
+https://gitee.com/uselesswater/CallLogGeneration
+下载最新apk
 ## 🎯 v3.0.0 重大升级
 
 ### 🔧 Vivo设备专项增强
