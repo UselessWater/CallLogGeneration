@@ -440,6 +440,6 @@ supportedRingDurationFields.forEach { field ->
 
 ---
 
-**注意**: 本工具由苏兄推出，请遵守相关法律法规，合理使用。作者：UselessWater
+**注意**: 本工具由UselessWater推出，请遵守相关法律法规，合理使用。作者：UselessWater
 
 *最后更新: 2025年8月28日*

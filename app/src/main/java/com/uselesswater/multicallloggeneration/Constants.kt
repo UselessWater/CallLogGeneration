@@ -44,7 +44,7 @@ object Constants {
     
     // 界面文本
     const val APP_TITLE = "📞 通话记录生成工具"
-    const val DEFAULT_MESSAGE = "本工具由苏廷洪推出，请勿用于非法用途！\n请输入电话号码，每行一个号码"
+    const val DEFAULT_MESSAGE = "本工具由UselessWater推出，请勿用于非法用途！\n请输入电话号码，每行一个号码"
     const val PHONE_NUMBER_POOL_TITLE = "电话号码池"
     const val PHONE_NUMBER_PLACEHOLDER = "例如：\n13800138000\n13900139000\n13700137000"
     const val PHONE_NUMBER_LABEL = "每行一个号码"
