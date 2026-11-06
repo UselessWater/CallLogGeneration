@@ -15,6 +15,16 @@
 .cxx
 local.properties
 
+# 本地打包产物
+*.apk
+*.apk.*
+
+# 签名文件，不要提交
+/keystore.properties
+/keystore/
+*.jks
+*.keystore
+
 # AI助手配置文件
 CLAUDE.md
 GEMINI.md

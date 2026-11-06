@@ -1,10 +1,47 @@
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+}
+
+// 默认使用仓库里的版本号；打 tag 发布时由 CI 通过 -PversionName/-PversionCode 覆盖。
+val appVersionName = providers.gradleProperty("versionName").orNull
+    ?: providers.environmentVariable("VERSION_NAME").orNull
+    ?: "3.0.0"
+val appVersionCode = (providers.gradleProperty("versionCode").orNull
+    ?: providers.environmentVariable("VERSION_CODE").orNull)?.toIntOrNull()
+    ?: 3
+
+// 签名信息优先读环境变量（CI），其次读项目根目录的 keystore.properties（本地）。
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.isFile) {
+        file.inputStream().use { load(it) }
+    }
+}
+
+fun signingValue(environmentName: String, propertyName: String): String? =
+    providers.environmentVariable(environmentName).orNull?.takeIf { it.isNotBlank() }
+        ?: keystoreProperties.getProperty(propertyName)?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = signingValue("RELEASE_KEYSTORE_FILE", "storeFile")
+    ?.let { rootProject.file(it) }
+    ?.takeIf { it.isFile }
+val releaseStorePassword = signingValue("RELEASE_STORE_PASSWORD", "storePassword")
+val releaseKeyAlias = signingValue("RELEASE_KEY_ALIAS", "keyAlias")
+val releaseKeyPassword = signingValue("RELEASE_KEY_PASSWORD", "keyPassword")
+val hasReleaseSigning = releaseStoreFile != null &&
+    releaseStorePassword != null &&
+    releaseKeyAlias != null &&
+    releaseKeyPassword != null
+
+if (signingValue("RELEASE_KEYSTORE_FILE", "storeFile") != null && !hasReleaseSigning) {
+    logger.warn("检测到签名配置，但 storePassword/keyAlias/keyPassword 不完整，release 构建将不签名。")
 }
 
 android {
@@ -15,15 +52,29 @@ android {
         applicationId = "com.uselesswater.multicallloggeneration"
         minSdk = 22
         targetSdk = 34
-        versionCode = 3
-        versionName = "3.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
