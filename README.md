@@ -37,7 +37,7 @@
 ## 下载
 
 - [GitHub Releases](https://github.com/UselessWater/CallLogGeneration/releases)：由 GitHub Actions 自动构建并发布签名 APK。
-- [Gitee](https://gitee.com/uselesswater/CallLogGeneration)：国内源码镜像，发布页可能滞后。
+- [Gitee Releases](https://gitee.com/uselesswater/CallLogGeneration/releases)：配置 `GITEE_TOKEN` 后，同一工作流会把 APK 自动同步到 Gitee；应用内更新也读取这里。
 
 ## 兼容性
 
@@ -81,7 +81,7 @@ Debug APK 位于 `app/build/outputs/apk/debug/`。
 | 工作流 | 触发条件 | 产物 |
 | --- | --- | --- |
 | Android CI | 推送到任意分支、Pull Request | Debug APK、单元测试结果、Lint 报告 |
-| Release | 推送 `vX.Y.Z` tag | 签名 Release APK、GitHub Release |
+| Release | 推送 `vX.Y.Z` tag | 签名 Release APK、GitHub Release、Gitee Release（配置 `GITEE_TOKEN` 后） |
 
 Release 工作流需要以下仓库 Secrets。请使用与现有安装包相同的密钥库，否则已安装用户无法覆盖升级：
 
@@ -91,6 +91,9 @@ Release 工作流需要以下仓库 Secrets。请使用与现有安装包相同�
 | `ANDROID_KEYSTORE_PASSWORD` | 密钥库密码 |
 | `ANDROID_KEY_ALIAS` | 密钥别名 |
 | `ANDROID_KEY_PASSWORD` | 密钥密码 |
+| `GITEE_TOKEN` | Gitee 私人令牌，勾选 `projects` 权限；未配置时跳过 Gitee 发布 |
+
+配置 `GITEE_TOKEN` 后，发布 tag 会同时更新 GitHub Release 和 Gitee Release，应用内更新可以自动检测到新版本。Gitee 私人令牌在「设置 > 私人令牌」中生成。
 
 生成密钥库 Base64（PowerShell）：
 

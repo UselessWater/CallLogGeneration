@@ -1,6 +1,6 @@
 name: Release
 
-# 推送 vX.Y.Z tag 后：用 release 密钥签名打包，并创建 GitHub Release。
+# 推送 vX.Y.Z tag 后：用 release 密钥签名打包，创建 GitHub Release，并在配置 GITEE_TOKEN 时同步到 Gitee。
 # 也可以手动运行，填入一个已存在的 tag。
 #
 # 需要的仓库 Secrets（Settings > Secrets and variables > Actions）：
@@ -8,6 +8,7 @@ name: Release
 #   ANDROID_KEYSTORE_PASSWORD 密钥库密码
 #   ANDROID_KEY_ALIAS         密钥别名
 #   ANDROID_KEY_PASSWORD      密钥密码
+#   GITEE_TOKEN               Gitee 私人令牌（projects 权限），用于同步 Gitee Release；可选
 #
 # 生成 base64（PowerShell）：
 #   [Convert]::ToBase64String([IO.File]::ReadAllBytes("release.jks"))
@@ -211,4 +212,15 @@ jobs:
           fi
 
           url=$(gh release view "$TAG" --json url --jq .url)
+          gh release view "$TAG" --json body --jq '.body // ""' > release-body.md
           echo "Release: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish Gitee Release
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_OWNER: uselesswater
+          GITEE_REPO: CallLogGeneration
+          BODY_FILE: release-body.md
+        run: |
+          export TARGET_SHA="$(git rev-parse HEAD)"
+          bash .github/scripts/publish-gitee-release.sh
