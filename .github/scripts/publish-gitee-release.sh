@@ -45,38 +45,36 @@ trap 'rm -f "$tmp"' EXIT
 status=$(curl -sS -o "$tmp" -w '%{http_code}' \
   "${api}/releases/tags/${tag}?access_token=${GITEE_TOKEN}")
 
-release_id=""
-case "$status" in
-  200)
-    release_id=$(jq -r '.id // empty' "$tmp")
-    echo "Gitee Release ${tag} 已存在（id=${release_id}）"
-    ;;
-  404)
-    echo "在 Gitee 创建 Release ${tag}"
-    args=(
-      --data-urlencode "access_token=${GITEE_TOKEN}"
-      --data-urlencode "tag_name=${tag}"
-      --data-urlencode "name=${tag}"
-      --data-urlencode "body=${body}"
-      --data-urlencode "target_commitish=${target}"
-    )
-    if [[ "$prerelease" == "true" ]]; then
-      args+=(--data-urlencode "prerelease=true")
-    fi
-    curl -fsS -X POST "${api}/releases" "${args[@]}" -o "$tmp"
-    release_id=$(jq -r '.id // empty' "$tmp")
-    ;;
-  *)
-    echo "读取 Gitee Release 失败（HTTP ${status}）：" >&2
-    cat "$tmp" >&2
-    exit 1
-    ;;
-esac
-
-if [[ -z "$release_id" ]]; then
-  echo "Gitee 未返回 release id：" >&2
+if [[ "$status" != "200" && "$status" != "404" ]]; then
+  echo "读取 Gitee Release 失败（HTTP ${status}）：" >&2
   cat "$tmp" >&2
   exit 1
+fi
+
+release_id=$(jq -r '.id // empty' "$tmp" 2>/dev/null || true)
+
+if [[ -n "$release_id" ]]; then
+  echo "Gitee Release ${tag} 已存在（id=${release_id}）"
+else
+  # Gitee 对不存在的 release 可能返回 404，也可能返回 200 + null。
+  echo "在 Gitee 创建 Release ${tag}"
+  args=(
+    --data-urlencode "access_token=${GITEE_TOKEN}"
+    --data-urlencode "tag_name=${tag}"
+    --data-urlencode "name=${tag}"
+    --data-urlencode "body=${body}"
+    --data-urlencode "target_commitish=${target}"
+  )
+  if [[ "$prerelease" == "true" ]]; then
+    args+=(--data-urlencode "prerelease=true")
+  fi
+  curl -fsS -X POST "${api}/releases" "${args[@]}" -o "$tmp"
+  release_id=$(jq -r '.id // empty' "$tmp")
+  if [[ -z "$release_id" ]]; then
+    echo "Gitee 创建 Release 失败：" >&2
+    cat "$tmp" >&2
+    exit 1
+  fi
 fi
 
 # 删除同名旧附件，保证重复运行也能更新文件。
