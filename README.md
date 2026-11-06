@@ -83,7 +83,7 @@ Debug APK 位于 `app/build/outputs/apk/debug/`。
 | Android CI | 推送到任意分支、Pull Request | Debug APK、单元测试结果、Lint 报告 |
 | Release | 推送 `vX.Y.Z` tag | 签名 Release APK、GitHub Release |
 
-Release 工作流需要以下仓库 Secrets：
+Release 工作流需要以下仓库 Secrets。请使用与现有安装包相同的密钥库，否则已安装用户无法覆盖升级：
 
 | Secret | 说明 |
 | --- | --- |
@@ -104,6 +104,8 @@ Release 工作流需要以下仓库 Secrets：
 git tag v3.0.2
 git push origin v3.0.2
 ```
+
+如果创建 Release 时提示权限不足，请在仓库 `Settings > Actions > General > Workflow permissions` 中允许工作流读写仓库内容。
 
 ### 本地签名
 
