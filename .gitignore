@@ -25,6 +25,9 @@ local.properties
 *.jks
 *.keystore
 
+# 本地 GitHub 令牌，不要提交
+/.github-token
+
 # AI助手配置文件
 CLAUDE.md
 GEMINI.md

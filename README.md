@@ -39,6 +39,8 @@
 - [GitHub Releases](https://github.com/UselessWater/CallLogGeneration/releases)：由 GitHub Actions 自动构建并发布签名 APK。
 - [Gitee Releases](https://gitee.com/uselesswater/CallLogGeneration/releases)：配置 `GITEE_TOKEN` 后，同一工作流会把 APK 自动同步到 Gitee；应用内更新也读取这里。
 
+> v3.0.2 更换了签名密钥，安装前请先卸载旧版本；卸载会清除应用数据。
+
 ## 兼容性
 
 | 项目 | 说明 |
@@ -83,7 +85,7 @@ Debug APK 位于 `app/build/outputs/apk/debug/`。
 | Android CI | 推送到任意分支、Pull Request | Debug APK、单元测试结果、Lint 报告 |
 | Release | 推送 `vX.Y.Z` tag | 签名 Release APK、GitHub Release、Gitee Release（配置 `GITEE_TOKEN` 后） |
 
-Release 工作流需要以下仓库 Secrets。请使用与现有安装包相同的密钥库，否则已安装用户无法覆盖升级：
+Release 工作流需要以下仓库 Secrets。请使用与当前安装包相同的密钥库（v3.0.2 起使用新密钥），否则已安装用户无法覆盖升级：
 
 | Secret | 说明 |
 | --- | --- |
